@@ -104,6 +104,7 @@ export async function latest(code, kind, since = "3h", fetcher = globalThis.fetc
     let body;
     try { body = JSON.parse(plain); } catch { continue; }
     const at = [event.time || 0, order++];
+    if (body && typeof body === "object" && typeof event.time === "number") body.relayAt = event.time * 1000;
     if (!best || at[0] > best.at[0] || (at[0] === best.at[0] && at[1] > best.at[1])) best = { at, body };
   }
   return best ? best.body : null;
@@ -161,6 +162,28 @@ export function clock(ms) {
 }
 
 const staleAfter = (every) => Math.max(8 * 60000, every > 0 ? every * 1000 + 2 * 60000 : 0);
+/** Same as noUpdateAfterMs in lib/budget.dart. */
+export const noUpdateAfter = (every) => Math.max(20 * 60000, every > 0 ? 2 * every * 1000 + 2 * 60000 : 0);
+
+/** Same rule as deadAlertApplies in lib/assurance.dart. */
+export function deadAlertApplies(dead, spot) {
+  if (!dead || typeof dead.lastAt !== "number") return false;
+  if (spot && (spot.revoked || spot.interrupt === "closed" || spot.paused)) return false;
+  const quiet = typeof dead.quietMs === "number" ? dead.quietMs : noUpdateAfter(Number(dead.every) || 0);
+  const spotAt = spot ? (typeof spot.updatedAt === "number" ? spot.updatedAt : typeof spot.at === "number" ? spot.at : null) : null;
+  let fired;
+  let newest;
+  if (typeof dead.relayAt === "number" && (!spot || typeof spot.relayAt === "number")) {
+    fired = dead.relayAt;
+    newest = spot ? spot.relayAt : null;
+  } else {
+    if (typeof dead.fireAt !== "number") return spotAt == null || spotAt <= dead.lastAt + 1000;
+    fired = dead.fireAt;
+    newest = spotAt;
+  }
+  if (newest == null) newest = dead.lastAt;
+  return fired - newest >= quiet;
+}
 const CHECKIN = { ok: "They are fine", traffic: "Traffic", food: "A food break", fuel: "Fuel or the vehicle", break: "A break", safe: "They said they are safe" };
 
 export function delayReason({ stillMin, stopsMin, paceKmh, plannedKmh, driverSaid }) {
@@ -209,8 +232,8 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   if (spot.paused) return out("Sharing paused", "quiet", `${name} paused sharing. That is not a signal gap.`);
   const stale = at != null && now - at >= staleAfter(Number(spot.every) || 0);
   if (stale) {
-    const deadSays = dead && typeof dead.lastAt === "number" && dead.lastAt + 1000 >= at;
-    if (now - at >= 20 * 60000 || deadSays) return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery: typeof spot.battery === "number" ? Math.round(spot.battery) : null, kmLeft }));
+    const deadSays = deadAlertApplies(dead, spot);
+    if (now - at >= noUpdateAfter(Number(spot.every) || 0) || deadSays) return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery: typeof spot.battery === "number" ? Math.round(spot.battery) : null, kmLeft }));
     return out("Signal gap", "quiet", place ? `Updates have stopped. Last point ${place}, ${clock(at)}. Not an emergency.` : `Updates have stopped. Last point ${clock(at)}. Not an emergency.`);
   }
   const back = catchUpLine(spot.back, at, place);
