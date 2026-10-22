@@ -195,7 +195,82 @@ export function readTrip(body) {
   const stops = Array.isArray(body.stops) ? body.stops : [];
   if (stops.length && typeof stops[stops.length - 1][3] === "number") total = stops[stops.length - 1][3];
   const speed = (Number(body.spd) || 60) * (VEHICLES[body.veh] || 1);
-  return { name: body.name || t.webDriver(), from: body.from || "", to: body.to || "", start: Number(body.start) || 0, totalKm: total, speedKmh: speed };
+  return { name: body.name || t.webDriver(), from: body.from || "", to: body.to || "", start: Number(body.start) || 0, totalKm: total, speedKmh: speed, points };
+}
+
+// ---- Weak-signal stretches (same as lib/signal_map.dart) -------------------
+// Cells (geohash-6, about 1.2 x 0.6 km) where five or more opted-in journeys
+// lost signal, published by Hushmile's server. The viewer asks only for whole
+// geohash-4 tiles (about 40 x 20 km) along the route, never the route itself,
+// and only once the phone has gone quiet.
+
+export const SIGNAL_API = `${PRIMARY_RELAY}/v1/signal`;
+const GH = "0123456789bcdefghjkmnpqrstuvwxyz";
+
+export function geohash(lat, lng, precision) {
+  const la = [-90, 90], lo = [-180, 180];
+  let out = "", bits = 0, ch = 0, even = true;
+  while (out.length < precision) {
+    const r = even ? lo : la, v = even ? lng : lat, mid = (r[0] + r[1]) / 2;
+    ch <<= 1;
+    if (v >= mid) { ch |= 1; r[0] = mid; } else r[1] = mid;
+    even = !even;
+    if (++bits === 5) { out += GH[ch]; bits = 0; ch = 0; }
+  }
+  return out;
+}
+
+export function tilesAlong(points) {
+  return [...new Set(points.map(([lat, lng]) => geohash(lat, lng, 4)))].slice(0, 40);
+}
+
+const weakCache = new Map();
+
+/** {cell: usual gap minutes} along these points; {} when the server does not answer. */
+export async function weakCellsAlong(points, fetcher = globalThis.fetch) {
+  const out = {};
+  await Promise.all(tilesAlong(points).map(async (tile) => {
+    try {
+      const res = await fetcher(`${SIGNAL_API}?tile=${tile}`);
+      if (!res.ok) return;
+      const body = await res.json();
+      for (const c of Array.isArray(body.cells) ? body.cells : []) {
+        if (c && typeof c.g === "string" && typeof c.gap === "number") out[c.g] = c.gap;
+      }
+    } catch (_) { /* no weak-signal hint, nothing else changes */ }
+  }));
+  return out;
+}
+
+/** Weak cells for a trip, fetched once per page (kept 6 hours). */
+export async function weakCellsForTrip(trip, fetcher = globalThis.fetch, now = Date.now()) {
+  if (!trip || !Array.isArray(trip.points) || !trip.points.length) return {};
+  const key = tilesAlong(trip.points).join(",");
+  const saved = weakCache.get(key);
+  if (saved && now - saved.at < 6 * 3600000) return saved.cells;
+  const cells = await weakCellsAlong(trip.points, fetcher);
+  weakCache.set(key, { at: now, cells });
+  return cells;
+}
+
+/** Usual gap if the phone went quiet in, or just before, a weak cell; else null. */
+export function weakNear(cells, { lat, lng, points, km: atKm, aheadKm = 12 } = {}) {
+  if (!cells || !Object.keys(cells).length) return null;
+  let best = null;
+  const consider = (la, ln) => {
+    const gap = cells[geohash(la, ln, 6)];
+    if (typeof gap === "number" && (best == null || gap > best)) best = gap;
+  };
+  if (typeof lat === "number" && typeof lng === "number") consider(lat, lng);
+  if (Array.isArray(points) && typeof atKm === "number") {
+    let along = 0;
+    for (let i = 0; i < points.length; i++) {
+      if (i) along += km(points[i - 1], points[i]);
+      if (along > atKm + aheadKm) break;
+      if (along >= atKm - 1) consider(points[i][0], points[i][1]);
+    }
+  }
+  return best;
 }
 
 // ---- The sentence (a port of lib/assurance.dart, family side) ---------------
@@ -268,7 +343,7 @@ export function catchUpLine(back, at, place) {
 }
 
 /** {title, tone, sentence, lastUpdate, kmLeft, battery, charging} for what the family should read. */
-export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = false }) {
+export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = false, weak = null }) {
   const name = trip ? trip.name : t.webDriver();
   const to = trip ? trip.to : t.webDestination();
   if (!spot || typeof spot.km !== "number") {
@@ -291,9 +366,12 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   if (spot.paused) return out("Sharing paused", "quiet", t.jsPaused({ name }));
   const stale = at != null && now - at >= staleAfter(Number(spot.every) || 0);
   if (stale) {
+    // A gap where signal is usually weak reads as expected, not alarming.
+    const weakGap = weakNear(weak, { lat: spot.lat, lng: spot.lng, points: trip && trip.points, km: spot.km });
+    const expected = weakGap == null ? "" : ` ${t.weakHere({ n: weakGap })}`;
     const deadSays = deadAlertApplies(dead, spot);
-    if (now - at >= noUpdateAfter(Number(spot.every) || 0) || deadSays) return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery, kmLeft }));
-    return out("Signal gap", "quiet", place ? t.jsGapAt({ dead: "", place, at: clock(at) }) : t.jsGap({ dead: "", at: clock(at) }));
+    if (now - at >= noUpdateAfter(Number(spot.every) || 0) || deadSays) return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery, kmLeft }) + expected);
+    return out("Signal gap", "quiet", (place ? t.jsGapAt({ dead: "", place, at: clock(at) }) : t.jsGap({ dead: "", at: clock(at) })) + expected);
   }
   const back = catchUpLine(spot.back, at, place);
   const lead = back ? back + " " : "";
@@ -327,5 +405,12 @@ export async function load(code, fetcher = globalThis.fetch, now = Date.now()) {
   const [tripBody, spot, dead] = await Promise.all([latest(code, "trip", "12h", fetcher), latest(code, "spot", "3h", fetcher), latest(code, "dead", "3h", fetcher).catch(() => null)]);
   const trip = readTrip(tripBody);
   if (!trip && !spot) return null;
-  return viewState({ trip, spot, dead, now, closedTrip: Boolean(tripBody && tripBody.revoked) });
+  const closedTrip = Boolean(tripBody && tripBody.revoked);
+  let state = viewState({ trip, spot, dead, now, closedTrip });
+  // Only a quiet phone needs the weak-signal hint, so only then ask for it.
+  if (trip && state.title === "Signal gap") {
+    const weak = await weakCellsForTrip(trip, fetcher, now).catch(() => ({}));
+    if (Object.keys(weak).length) state = viewState({ trip, spot, dead, now, closedTrip, weak });
+  }
+  return state;
 }

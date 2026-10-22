@@ -89,6 +89,7 @@ export const STRINGS = {
     webEnded: (a = {}) => `The journey has ended. The code is closed.`,
     webDriver: (a = {}) => `The driver`,
     webDestination: (a = {}) => `the destination`,
+    weakHere: (a = {}) => `Signal is often weak here; gaps of about ${a.n} minutes are usual, so this one is expected.`,
   },
   te: {
     privacy: (a = {}) => `గోప్యత`,
@@ -179,6 +180,7 @@ export const STRINGS = {
     webEnded: (a = {}) => `ప్రయాణం ముగిసింది. కోడ్ మూసుకుంది.`,
     webDriver: (a = {}) => `డ్రైవర్`,
     webDestination: (a = {}) => `గమ్యం`,
+    weakHere: (a = {}) => `ఇక్కడ తరచూ సిగ్నల్ బలహీనంగా ఉంటుంది; సుమారు ${a.n} నిమిషాల విరామం సాధారణం, కాబట్టి ఇది ఊహించినదే.`,
   },
   hi: {
     privacy: (a = {}) => `निजता`,
@@ -269,5 +271,6 @@ export const STRINGS = {
     webEnded: (a = {}) => `सफ़र ख़त्म हो गया है। कोड बंद है।`,
     webDriver: (a = {}) => `ड्राइवर`,
     webDestination: (a = {}) => `मंज़िल`,
+    weakHere: (a = {}) => `यहाँ अक्सर सिग्नल कमज़ोर रहता है; लगभग ${a.n} मिनट का अंतर आम है, इसलिए यह अंतर अपेक्षित है।`,
   },
 };
