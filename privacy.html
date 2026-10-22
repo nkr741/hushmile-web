@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
-  <link rel="icon" href="data:,">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <link rel="icon" href="./favicon.ico" sizes="any">
+  <link rel="canonical" href="https://hushmile.com/privacy.html">
   <title>Hushmile · Privacy policy</title>
   <style>
     :root { --bg:#fff; --fg:#16181d; --muted:#4f5663; --blue:#2f6bff; }
@@ -13,15 +14,15 @@
     body { margin:0; background:var(--bg); color:var(--fg); font: 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     main { max-width: 680px; margin: 0 auto; padding: 20px 16px 48px; }
     header { display:flex; align-items:center; gap:10px; }
-    .mark { width:40px; height:40px; border-radius:12px; background:var(--blue); color:#fff; display:grid; place-items:center; font-weight:800; font-size:22px; }
+    .mark { width:40px; height:40px; border-radius:10px; }
     h1 { font-size: 24px; margin: 0; } h2 { font-size: 19px; margin-top: 28px; }
     p, li { color: var(--muted); } a { color: var(--blue); }
   </style>
 </head>
 <body>
 <main>
-  <header><div class="mark" aria-hidden="true">H</div><h1>Hushmile privacy policy</h1></header>
-  <p>Last updated 22 October 2026. Applies to the Hushmile Android app (app.hushmile.journey) and this web viewer.</p>
+  <header><a href="./"><img class="mark" src="./img/logo-64.png" width="40" height="40" alt="Hushmile home"></a><h1>Hushmile privacy policy</h1></header>
+  <p>Last updated 22 October 2026. Applies to the Hushmile Android app (app.hushmile.journey), the web viewer and the website at hushmile.com.</p>
 
   <h2>In short</h2>
   <p>Hushmile lets a driver share one road trip with family. There is no account. Since app version 1.3.0 Hushmile runs its own small server (api.hushmile.com) that relays encrypted updates and passes place search and traffic times to Google; it cannot read journey updates. Journey updates are encrypted on the driver's phone with a key made from the Journey Code, and only someone with that code can read them. We (the developer) cannot read them.</p>
@@ -44,14 +45,15 @@
     <li><strong>Google Firebase Cloud Messaging</strong> wakes the family phone when there is news. The wake-up carries only a random channel name and the words "New message": no place and nothing from the update. Google sees that the phone follows that channel and when it was woken.</li>
     <li><strong>Google Maps Platform</strong> (Places and Routes), reached only through the Hushmile server, for destination search and traffic-aware travel times. Google receives the text you type or the start and end points of the drive, from the server's address, without your name, phone address or Journey Code.</li>
     <li><strong>OpenStreetMap services</strong> (Nominatim and Photon for place search and place names, OSRM for driving routes and time, Overpass for the nearest hospital, police station and fuel when Need help is used, and OpenStreetMap map tiles). These receive the place you type or a position, over HTTPS, without your name or code, under their own privacy policies.</li>
+    <li><strong>Weak-signal stretches</strong> (app 1.3.1+). The family's app (when it opens a journey) or this viewer (when the phone goes quiet) asks the Hushmile server which spots along the route often lose signal, so a gap there can read as expected. It asks for whole areas of about 40 x 20 km, never the route or the Journey Code. Only if the driver turns on <em>Help map weak signal</em> in Settings (off by default) does the end of a journey send one anonymous report: a list of squares of about 1 km where updates could not get out for 3 minutes or more, with the hour of the week and a rounded length. It has no code, name, exact times or order, leaves out everything within 2 km of the start and the end, and goes from the phone's internet address, which is used only for a daily limit. The server keeps only a count and usual gap per square, not the report, and shows a square only after 5 different journeys reported it.</li>
     <li>If the driver chooses to text someone or call for help, the phone's own SMS or dialler app is used.</li>
   </ul>
 
-  <h2>This web viewer</h2>
-  <p>The viewer page is static and hosted on GitHub Pages. The Journey Code stays in the link after the <code>#</code>, which browsers do not send to the web server. The page decrypts updates in your browser and only connects to the Hushmile relay and ntfy.sh. GitHub may log basic request data (such as IP address) under its own policy.</p>
+  <h2>This website and web viewer</h2>
+  <p>The website and viewer are static pages hosted on GitHub Pages (hushmile.com, formerly nkr741.github.io/hushmile-web; old links forward). The website uses no cookies, analytics, trackers or third-party fonts. The Journey Code stays in the link after the <code>#</code>, which browsers do not send to the web server. The page decrypts updates in your browser and only connects to the Hushmile relay and ntfy.sh. GitHub may log basic request data (such as IP address) under its own policy.</p>
 
   <h2>Keeping and deleting data</h2>
-  <p>Journey details on the phone are kept only for the current journey and the last arrival screen. Ending a journey sends a "closed" notice so the code stops opening it, and relay copies expire after about 19 hours (12 hours on ntfy.sh). Uninstalling the app or clearing its storage deletes everything on the phone. Because there is no account and the server keeps only encrypted messages that expire, there is nothing else for us to delete; contact us if you have a question.</p>
+  <p>Journey details on the phone are kept only for the current journey and the last arrival screen. Ending a journey sends a "closed" notice so the code stops opening it, and relay copies expire after about 19 hours (12 hours on ntfy.sh). Uninstalling the app or clearing its storage deletes everything on the phone. Because there is no account and the server keeps only encrypted messages that expire, there is nothing else for us to delete (weak-signal counts are anonymous and cannot be tied to a person); contact us if you have a question.</p>
 
   <h2>Children</h2>
   <p>Hushmile is meant for adults aged 18 and over.</p>
