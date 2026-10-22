@@ -2,6 +2,31 @@
 // browser. The trip code comes from the URL fragment (#ABCD-EFGH), which
 // browsers never send to the web server. Same steps as lib/seal.dart.
 
+import { STRINGS } from "./i18n.js";
+
+// ---- Language (same words as the app: lib/l10n/*.arb) ----------------------
+
+let lang = "en";
+export const LANGUAGES = ["en", "te", "hi"];
+export function setLanguage(code) {
+  lang = LANGUAGES.includes(code) ? code : "en";
+  return lang;
+}
+export const language = () => lang;
+
+/** A saved choice wins; otherwise the first browser language Hushmile speaks. */
+export function pickLanguage(saved, preferred = []) {
+  if (LANGUAGES.includes(saved)) return saved;
+  for (const item of preferred) {
+    const code = String(item || "").toLowerCase().split("-")[0];
+    if (LANGUAGES.includes(code)) return code;
+  }
+  return "en";
+}
+
+/** t.key({name: ...}) in the current language, English if a key is missing. */
+export const t = new Proxy({}, { get: (_, key) => (args) => (STRINGS[lang][key] || STRINGS.en[key])(args) });
+
 export const KDF_ROUNDS = 150000;
 export const KDF_SALT = "hushmile-v2";
 export const SEAL_VERSION = 2;
@@ -150,15 +175,24 @@ export function readTrip(body) {
   const stops = Array.isArray(body.stops) ? body.stops : [];
   if (stops.length && typeof stops[stops.length - 1][3] === "number") total = stops[stops.length - 1][3];
   const speed = (Number(body.spd) || 60) * (VEHICLES[body.veh] || 1);
-  return { name: body.name || "Driver", from: body.from || "", to: body.to || "", start: Number(body.start) || 0, totalKm: total, speedKmh: speed };
+  return { name: body.name || t.webDriver(), from: body.from || "", to: body.to || "", start: Number(body.start) || 0, totalKm: total, speedKmh: speed };
 }
 
 // ---- The sentence (a port of lib/assurance.dart, family side) ---------------
 
+/** Same as clockFor in lib/lang.dart: Telugu AM/PM, English and Hindi am/pm. */
 export function clock(ms) {
-  const t = new Date(ms);
-  const h = t.getHours() % 12 === 0 ? 12 : t.getHours() % 12;
-  return `${h}:${String(t.getMinutes()).padStart(2, "0")} ${t.getHours() >= 12 ? "pm" : "am"}`;
+  const d = new Date(ms);
+  const h = d.getHours() % 12 === 0 ? 12 : d.getHours() % 12;
+  const pm = d.getHours() >= 12;
+  const mark = lang === "te" ? (pm ? "PM" : "AM") : pm ? "pm" : "am";
+  return `${h}:${String(d.getMinutes()).padStart(2, "0")} ${mark}`;
+}
+
+/** Same as nearMinutes in lib/arrival.dart. */
+export function nearMinutes(distanceM, roadMin) {
+  if (typeof roadMin === "number" && roadMin >= 0) return Math.max(1, Math.round(roadMin));
+  return Math.max(1, Math.round((distanceM / 1000 / 25) * 60));
 }
 
 const staleAfter = (every) => Math.max(8 * 60000, every > 0 ? every * 1000 + 2 * 60000 : 0);
@@ -184,77 +218,87 @@ export function deadAlertApplies(dead, spot) {
   if (newest == null) newest = dead.lastAt;
   return fired - newest >= quiet;
 }
-const CHECKIN = { ok: "They are fine", traffic: "Traffic", food: "A food break", fuel: "Fuel or the vehicle", break: "A break", safe: "They said they are safe" };
+const CHECKIN = { ok: "ciOk", traffic: "ciTraffic", food: "ciFood", fuel: "ciFuel", break: "ciBreak", safe: "ciSafe", vehicle: "ciVehicle" };
+const checkinLabel = (said) => (CHECKIN[said] ? t[CHECKIN[said]]() : said);
 
 export function delayReason({ stillMin, stopsMin, paceKmh, plannedKmh, driverSaid }) {
-  if (driverSaid === "traffic") return "The driver said traffic.";
-  if (driverSaid === "food" || driverSaid === "break") return "The driver is taking a break.";
-  if (driverSaid === "fuel") return "The driver stopped for fuel.";
-  if (stillMin >= 10) return `Stopped for ${stillMin} minutes, likely a break.`;
-  if (paceKmh != null && plannedKmh > 0 && paceKmh < plannedKmh * 0.8) return `Moving slower than planned, about ${paceKmh} km/h against ${Math.round(plannedKmh)} planned.`;
-  if (stopsMin >= 10) return `Stops so far add up to about ${stopsMin} minutes.`;
+  if (driverSaid === "traffic") return t.rsTraffic();
+  if (driverSaid === "food" || driverSaid === "break") return t.rsBreak();
+  if (driverSaid === "fuel") return t.rsFuel();
+  if (stillMin >= 10) return t.rsStopped({ n: stillMin });
+  if (paceKmh != null && plannedKmh > 0 && paceKmh < plannedKmh * 0.8) return t.rsSlow({ pace: paceKmh, plan: Math.round(plannedKmh) });
+  if (stopsMin >= 10) return t.rsStops({ n: stopsMin });
   return null;
 }
 
 export function deadPhoneLine({ lastAt, place, battery, kmLeft }) {
-  const where = place ? ` near ${place}` : "";
-  const left = kmLeft == null ? "" : `, ${Math.round(kmLeft)} km from the destination`;
-  const power = battery == null ? " The phone may be off or out of signal." : battery <= 15 ? ` The battery was ${battery}%, so the phone may have switched off.` : ` The battery was ${battery}%. It may be out of signal.`;
-  return `No update since ${clock(lastAt)}. Last seen${where}${left}.${power} Not an emergency on its own.`;
+  const where = place ? t.dpNear({ place }) : "";
+  const left = kmLeft == null ? "" : t.dpLeft({ km: Math.round(kmLeft) });
+  const power = battery == null ? t.dpOff() : battery <= 15 ? t.dpLowBattery({ n: battery }) : t.dpBattery({ n: battery });
+  return t.dpLine({ at: clock(lastAt), where, left, power });
 }
 
 export function catchUpLine(back, at, place) {
   if (!back || typeof back.from !== "number" || at == null) return null;
   const minutes = Math.round((at - back.from) / 60000);
-  const head = `Back online ${clock(at)}.`;
-  if (typeof back.n === "number" && back.n <= 0) return `${head} No location was recorded during the ${minutes} minutes without signal.`;
-  if (typeof back.km === "number" && back.km >= 1) return `${head} Kept moving, ${Math.round(back.km)} km covered while out of signal.`;
-  return `${head} Stayed${place ? ` near ${place}` : ""} during the ${minutes} minutes without signal.`;
+  const head = t.cuHead({ at: clock(at) });
+  if (typeof back.n === "number" && back.n <= 0) return t.cuNone({ head, n: minutes });
+  if (typeof back.km === "number" && back.km >= 1) return t.cuMoved({ head, km: Math.round(back.km) });
+  return t.cuStayed({ head, near: place ? t.dpNear({ place }) : "", n: minutes });
 }
 
-/** {title, tone, sentence, lastUpdate, kmLeft} for what the family should read. */
+/** {title, tone, sentence, lastUpdate, kmLeft, battery, charging} for what the family should read. */
 export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = false }) {
-  const name = trip ? trip.name : "The driver";
-  const to = trip ? trip.to : "the destination";
+  const name = trip ? trip.name : t.webDriver();
+  const to = trip ? trip.to : t.webDestination();
   if (!spot || typeof spot.km !== "number") {
-    if (closedTrip || (spot && spot.revoked)) return { title: "Tracking stopped", tone: "quiet", sentence: spot && spot.arrived ? `${name} confirmed arrival. You don't have to call.` : "The journey has ended. The code is closed.", lastUpdate: null, kmLeft: null };
-    return { title: "Waiting for a location", tone: "quiet", sentence: "Waiting for the first point. The clock is not moving the car.", lastUpdate: null, kmLeft: trip ? trip.totalKm : null };
+    if (closedTrip || (spot && spot.revoked)) return { title: "Tracking stopped", tone: "quiet", sentence: spot && spot.arrived ? t.jsArrived({ name }) : t.webEnded(), lastUpdate: null, kmLeft: null, battery: null, charging: false };
+    return { title: "Waiting for a location", tone: "quiet", sentence: t.jsWaiting(), lastUpdate: null, kmLeft: trip ? trip.totalKm : null, battery: null, charging: false };
   }
   const at = typeof spot.updatedAt === "number" ? spot.updatedAt : null;
   const total = trip ? trip.totalKm : spot.km;
   const kmLeft = Math.max(0, total - spot.km);
   const place = typeof spot.place === "string" ? spot.place : null;
-  const out = (title, tone, sentence) => ({ title, tone, sentence, lastUpdate: at, kmLeft });
+  const battery = typeof spot.battery === "number" ? Math.round(spot.battery) : null;
+  const charging = spot.charging === true;
+  // Under 10% and not charging: one calm warning on any live status.
+  const low = battery != null && !charging && battery < 10 ? ` ${t.jsBatteryLow({ n: battery })}` : "";
+  const out = (title, tone, sentence, live = false) => ({ title, tone, sentence: live ? sentence + low : sentence, lastUpdate: at, kmLeft, battery, charging });
   if (spot.revoked || spot.interrupt === "closed") {
-    return spot.arrived ? out("Arrived safely", "calm", `${name} confirmed arrival. You don't have to call.`) : out("Tracking stopped", "quiet", "The driver ended the journey before arrival. The code is closed.");
+    return spot.arrived ? out("Arrived safely", "calm", t.jsArrived({ name })) : out("Tracking stopped", "quiet", t.jsEndedEarly());
   }
-  if (spot.checkin === "help" || (spot.sos === true && spot.checkin !== "safe")) return out("Needs help", "help", place ? `${name} asked for help at ${place}. This is the moment to act.` : `${name} asked for help. This is the moment to act.`);
-  if (spot.paused) return out("Sharing paused", "quiet", `${name} paused sharing. That is not a signal gap.`);
+  if (spot.checkin === "help" || (spot.sos === true && spot.checkin !== "safe")) return out("Needs help", "help", place ? t.jsHelpAt({ name, place }) : t.jsHelp({ name }));
+  if (spot.paused) return out("Sharing paused", "quiet", t.jsPaused({ name }));
   const stale = at != null && now - at >= staleAfter(Number(spot.every) || 0);
   if (stale) {
     const deadSays = deadAlertApplies(dead, spot);
-    if (now - at >= noUpdateAfter(Number(spot.every) || 0) || deadSays) return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery: typeof spot.battery === "number" ? Math.round(spot.battery) : null, kmLeft }));
-    return out("Signal gap", "quiet", place ? `Updates have stopped. Last point ${place}, ${clock(at)}. Not an emergency.` : `Updates have stopped. Last point ${clock(at)}. Not an emergency.`);
+    if (now - at >= noUpdateAfter(Number(spot.every) || 0) || deadSays) return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery, kmLeft }));
+    return out("Signal gap", "quiet", place ? t.jsGapAt({ dead: "", place, at: clock(at) }) : t.jsGap({ dead: "", at: clock(at) }));
   }
   const back = catchUpLine(spot.back, at, place);
   const lead = back ? back + " " : "";
-  if (kmLeft <= 3 && kmLeft > 0) return out("Near the destination", "calm", `${lead}Near ${to}. Not arrived yet. The code stays open.`);
+  // The driver phone's geofence decides; an older app falls back to 3 km.
+  const near = typeof spot.near === "boolean" ? spot.near : kmLeft <= 3 && kmLeft > 0;
+  if (near) {
+    const metres = typeof spot.nearM === "number" ? spot.nearM : kmLeft * 1000;
+    return out("Near the destination", "calm", `${lead}${t.jsAlmost({ n: nearMinutes(metres, spot.roadMin) })}`, true);
+  }
   const stillMin = typeof spot.movedAt === "number" ? Math.max(0, Math.floor((now - spot.movedAt) / 60000)) : 0;
   const stopMin = [15, 30, 45].includes(spot.stopMin) ? spot.stopMin : 15;
   const said = typeof spot.checkin === "string" && spot.checkin !== "help" ? spot.checkin : null;
-  if (stillMin >= stopMin && !said) return out("Check-in requested", "checkin", `${lead}${place ? `Stopped longer than expected at ${place}.` : "Stopped longer than expected."} Waiting for the next update.`);
+  if (stillMin >= stopMin && !said) return out("Check-in requested", "checkin", `${lead}${place ? t.jsStoppedLongAt({ place }) : t.jsStoppedLong()}`, true);
   const speed = trip ? trip.speedKmh : 60;
   const moveMin = typeof spot.roadMin === "number" ? spot.roadMin : (kmLeft / speed) * 60;
   const arrivesAt = trip && trip.start ? trip.start + (total / speed) * 3600000 : null;
   const late = arrivesAt ? Math.round((now + moveMin * 60000 - arrivesAt) / 60000) : 0;
   const minutes = moveMin >= 1 ? Math.round(moveMin) : null;
   if (late > 8) {
-    const why = delayReason({ stillMin, stopsMin: Number(spot.stopsMin) || 0, paceKmh: typeof spot.paceKmh === "number" ? Math.round(spot.paceKmh) : null, plannedKmh: speed, driverSaid: said }) || (said ? `${CHECKIN[said] || said}.` : "No reason is known yet.");
-    if (late > 25) return out("At risk", "checkin", `${lead}This needs a look. About ${late} minutes past the plan. ${why} Last point ${place || clock(at)}.`);
-    return out("Delayed", "calm", `${lead}Running about ${late} minutes late. ${why}${minutes ? ` About ${minutes} minutes remaining.` : ""} Not an emergency.`);
+    const why = delayReason({ stillMin, stopsMin: Number(spot.stopsMin) || 0, paceKmh: typeof spot.paceKmh === "number" ? Math.round(spot.paceKmh) : null, plannedKmh: speed, driverSaid: said }) || (said ? `${checkinLabel(said)}.` : t.jsNoReason());
+    if (late > 25) return out("At risk", "checkin", `${lead}${t.jsRiskReason({ past: t.jsRiskPast({ n: late }), reason: why, where: place || clock(at) })}`, true);
+    return out("Delayed", "calm", `${lead}${t.jsLate({ late, why, rest: minutes ? t.jsMinRest({ m: minutes }) : "" })}`, true);
   }
-  if (said) return out("On track", "calm", `${lead}${CHECKIN[said] || said}. Not an emergency.`);
-  return out("On track", "calm", `${lead}${minutes ? `On schedule. About ${minutes} minutes remaining.` : "On schedule. No action is needed."}`);
+  if (said) return out("On track", "calm", `${lead}${t.jsBecause({ because: checkinLabel(said) })}`, true);
+  return out("On track", "calm", `${lead}${minutes ? t.jsOnScheduleMin({ m: minutes }) : t.jsOnSchedule()}`, true);
 }
 
 // ---- Page ------------------------------------------------------------------

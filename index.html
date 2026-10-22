@@ -13,12 +13,14 @@
     * { box-sizing: border-box; }
     body { margin:0; background:var(--bg); color:var(--fg); font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     main { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; }
-    header { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+    header { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+    header .lang { margin-left:auto; display:flex; align-items:center; gap:6px; font-size:15px; color:var(--muted); }
+    select { font-size:16px; padding:6px 8px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--fg); max-width:100%; }
     header .mark { width:40px; height:40px; border-radius:12px; background:var(--blue); color:#fff; display:grid; place-items:center; font-weight:800; font-size:22px; }
     h1 { font-size: 20px; margin: 0; }
     .hero { border-radius: 24px; padding: 18px; border: 1.5px solid var(--tone); background: color-mix(in srgb, var(--tone) 8%, var(--bg)); }
     .band { color: var(--tone); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: 14px; }
-    .sentence { font-size: 22px; font-weight: 700; margin: 8px 0 12px; line-height: 1.3; }
+    .sentence { font-size: 22px; font-weight: 700; margin: 8px 0 12px; line-height: 1.35; overflow-wrap: anywhere; }
     .facts { display:flex; flex-wrap:wrap; gap: 8px 18px; font-weight: 600; }
     form { display:flex; gap:8px; margin-top: 12px; }
     input { flex:1; min-width:0; width:100%; font-size: 20px; letter-spacing: 2px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--fg); min-height: 52px; }
@@ -28,18 +30,18 @@
 </head>
 <body>
   <main>
-    <header><div class="mark" aria-hidden="true">H</div><h1>Hushmile</h1></header>
+    <header><div class="mark" aria-hidden="true">H</div><h1>Hushmile</h1><label class="lang"><span id="lang-label">Language</span><select id="lang"></select></label></header>
     <section id="status" class="hero" style="--tone: var(--quiet)" aria-live="polite">
       <div class="band" id="band">Journey</div>
       <div class="sentence" id="sentence">Enter the Journey Code you were sent.</div>
-      <div class="facts"><span id="last"></span><span id="left"></span></div>
+      <div class="facts"><span id="last"></span><span id="left"></span><span id="battery"></span></div>
     </section>
     <form id="form" autocomplete="off">
-      <label for="code" class="visually-hidden" style="position:absolute;left:-9999px">Journey Code</label>
+      <label for="code" id="code-label" class="visually-hidden" style="position:absolute;left:-9999px">Journey Code</label>
       <input id="code" name="code" placeholder="ABCD-EFGH" inputmode="text" autocapitalize="characters" maxlength="12">
-      <button type="submit">Open</button>
+      <button type="submit" id="open">Open</button>
     </form>
-    <p class="note">Read-only. The code stays in this page's address after the #, which is not sent to the web server. Updates are decrypted in this browser. Updates every minute. Hushmile is not an emergency service. <a href="./privacy.html">Privacy</a></p>
+    <p class="note"><span id="note-text">Read-only. The code stays in this page's address after the #, which is not sent to the web server. Updates are decrypted in this browser. Updates every minute. Hushmile is not an emergency service. </span><a id="privacy" href="./privacy.html">Privacy</a></p>
   </main>
   <script type="module" src="./app.js"></script>
 </body>
