@@ -24,7 +24,7 @@
   <p>Last updated 22 October 2026. Applies to the Hushmile Android app (app.hushmile.journey) and this web viewer.</p>
 
   <h2>In short</h2>
-  <p>Hushmile lets a driver share one road trip with family. There is no account and no Hushmile server. Journey updates are encrypted on the driver's phone with a key made from the Journey Code, and only someone with that code can read them. We (the developer) cannot read them.</p>
+  <p>Hushmile lets a driver share one road trip with family. There is no account. Since app version 1.3.0 Hushmile runs its own small server (api.hushmile.com) that relays encrypted updates and passes place search and traffic times to Google; it cannot read journey updates. Journey updates are encrypted on the driver's phone with a key made from the Journey Code, and only someone with that code can read them. We (the developer) cannot read them.</p>
 
   <h2>What the app uses</h2>
   <ul>
@@ -39,16 +39,19 @@
 
   <h2>Services the app talks to</h2>
   <ul>
-    <li><strong>ntfy.sh</strong> (public message relay) carries the encrypted updates. It keeps each sealed message for about 12 hours and cannot read it. It sees the time and the phone's internet (IP) address.</li>
+    <li><strong>Hushmile relay</strong> (api.hushmile.com, a self-hosted ntfy server in Bangalore, India) carries the encrypted updates. It keeps each sealed message for up to 19 hours and cannot read it. It sees the time and the phone's internet (IP) address, which it uses in memory for rate limits and does not write to its logs in normal operation.</li>
+    <li><strong>ntfy.sh</strong> (public message relay) is the fallback when the Hushmile relay does not answer. It keeps each sealed message for about 12 hours and cannot read it. It sees the time and the phone's internet (IP) address.</li>
+    <li><strong>Google Firebase Cloud Messaging</strong> wakes the family phone when there is news. The wake-up carries only a random channel name and the words "New message": no place and nothing from the update. Google sees that the phone follows that channel and when it was woken.</li>
+    <li><strong>Google Maps Platform</strong> (Places and Routes), reached only through the Hushmile server, for destination search and traffic-aware travel times. Google receives the text you type or the start and end points of the drive, from the server's address, without your name, phone address or Journey Code.</li>
     <li><strong>OpenStreetMap services</strong> (Nominatim and Photon for place search and place names, OSRM for driving routes and time, Overpass for the nearest hospital, police station and fuel when Need help is used, and OpenStreetMap map tiles). These receive the place you type or a position, over HTTPS, without your name or code, under their own privacy policies.</li>
     <li>If the driver chooses to text someone or call for help, the phone's own SMS or dialler app is used.</li>
   </ul>
 
   <h2>This web viewer</h2>
-  <p>The viewer page is static and hosted on GitHub Pages. The Journey Code stays in the link after the <code>#</code>, which browsers do not send to the web server. The page decrypts updates in your browser and only connects to ntfy.sh. GitHub may log basic request data (such as IP address) under its own policy.</p>
+  <p>The viewer page is static and hosted on GitHub Pages. The Journey Code stays in the link after the <code>#</code>, which browsers do not send to the web server. The page decrypts updates in your browser and only connects to the Hushmile relay and ntfy.sh. GitHub may log basic request data (such as IP address) under its own policy.</p>
 
   <h2>Keeping and deleting data</h2>
-  <p>Journey details on the phone are kept only for the current journey and the last arrival screen. Ending a journey sends a "closed" notice so the code stops opening it, and relay copies expire after about 12 hours. Uninstalling the app or clearing its storage deletes everything on the phone. Because there is no account or server, there is nothing else for us to delete; contact us if you have a question.</p>
+  <p>Journey details on the phone are kept only for the current journey and the last arrival screen. Ending a journey sends a "closed" notice so the code stops opening it, and relay copies expire after about 19 hours (12 hours on ntfy.sh). Uninstalling the app or clearing its storage deletes everything on the phone. Because there is no account and the server keeps only encrypted messages that expire, there is nothing else for us to delete; contact us if you have a question.</p>
 
   <h2>Children</h2>
   <p>Hushmile is meant for adults aged 18 and over.</p>
