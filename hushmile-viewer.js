@@ -1,4 +1,4 @@
-// Hushmile web viewer. Reads a journey from ntfy.sh and decrypts it in the
+// Hushmile web viewer. Reads a journey from Hushmile's relay and ntfy.sh and decrypts it in the
 // browser. The trip code comes from the URL fragment (#ABCD-EFGH), which
 // browsers never send to the web server. Same steps as lib/seal.dart.
 
@@ -30,7 +30,15 @@ export const t = new Proxy({}, { get: (_, key) => (args) => (STRINGS[lang][key] 
 export const KDF_ROUNDS = 150000;
 export const KDF_SALT = "hushmile-v2";
 export const SEAL_VERSION = 2;
-export const RELAY = "https://ntfy.sh";
+// Relays (app 1.3.0+): Hushmile's own ntfy server first, ntfy.sh as the
+// fallback. The app writes each message to exactly one of them (ntfy.sh only
+// when ours does not take it), so the viewer reads both and keeps the newest,
+// the same "write one, read both" rule as the app (lib/relay.dart).
+export const PRIMARY_RELAY = "https://api.hushmile.com";
+export const FALLBACK_RELAY = "https://ntfy.sh";
+export const RELAYS = [PRIMARY_RELAY, FALLBACK_RELAY];
+/** @deprecated kept for older callers: the fallback relay. */
+export const RELAY = FALLBACK_RELAY;
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -111,10 +119,22 @@ export async function openFor(code, kind, sealed) {
   }
 }
 
-/** Newest readable message on a channel, parsed, or null. */
-export async function latest(code, kind, since = "3h", fetcher = globalThis.fetch) {
+/** Newest readable message on a channel across all relays, parsed, or null.
+ * Throws only when no relay answered. */
+export async function latest(code, kind, since = "3h", fetcher = globalThis.fetch, relays = RELAYS) {
   const topic = await topicFor(code, kind);
-  const res = await fetcher(`${RELAY}/${topic}/json?poll=1&since=${since}`);
+  const answers = await Promise.allSettled(relays.map((relay) => readRelay(relay, topic, code, kind, since, fetcher)));
+  const ok = answers.filter((a) => a.status === "fulfilled").map((a) => a.value);
+  if (!ok.length) throw answers[0].reason || new Error("relay");
+  let best = null;
+  for (const found of ok) {
+    if (found && (!best || found.at[0] > best.at[0] || (found.at[0] === best.at[0] && found.at[1] > best.at[1]))) best = found;
+  }
+  return best ? best.body : null;
+}
+
+async function readRelay(relay, topic, code, kind, since, fetcher) {
+  const res = await fetcher(`${relay}/${topic}/json?poll=1&since=${since}`);
   if (!res.ok) throw new Error(`relay ${res.status}`);
   const text = await res.text();
   let best = null;
@@ -132,7 +152,7 @@ export async function latest(code, kind, since = "3h", fetcher = globalThis.fetc
     if (body && typeof body === "object" && typeof event.time === "number") body.relayAt = event.time * 1000;
     if (!best || at[0] > best.at[0] || (at[0] === best.at[0] && at[1] > best.at[1])) best = { at, body };
   }
-  return best ? best.body : null;
+  return best;
 }
 
 // ---- Route -----------------------------------------------------------------
