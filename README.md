@@ -29,3 +29,7 @@ Map: blue line = the planned route, grey dots = earlier places (the trail),
 marker = the last known place with its age. Nothing on the map is live.
 
 Tests: `node --test test/`
+
+`safety-config.js` is generated in the app repo from `config/safety.json`
+(SOS timing, emergency numbers by country, night hours, battery bands) by
+`python3 tool/safety_to_code.py`; copy it here with the other viewer files.

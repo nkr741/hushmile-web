@@ -4,6 +4,7 @@
 // send to the web server. Same steps as lib/seal.dart.
 
 import { STRINGS } from "./i18n.js";
+import { SAFETY } from "./safety-config.js";
 
 // ---- Language (same words as the app: lib/l10n/*.arb) ----------------------
 
@@ -558,6 +559,108 @@ const staleAfter = (every) => Math.max(8 * 60000, every > 0 ? every * 1000 + 2 *
 /** Same as noUpdateAfterMs in lib/budget.dart. */
 export const noUpdateAfter = (every) => Math.max(20 * 60000, every > 0 ? 2 * every * 1000 + 2 * 60000 : 0);
 
+// ---- Safety (1.4.2; same rules as lib/safety.dart, numbers from config/safety.json)
+
+/** Night hours, in this browser's time zone. */
+export function isNightHour(hour) {
+  const { startHour: start, endHour: end } = SAFETY.night;
+  return start > end ? hour >= start || hour < end : hour >= start && hour < end;
+}
+export const nightAt = (ms) => isNightHour(new Date(ms).getHours());
+
+/** Same as nightQuietMs: a shorter silence limit when the last point came at night. */
+export function nightQuiet(dayMs, pointAt) {
+  if (pointAt == null || !nightAt(pointAt)) return dayMs;
+  const shorter = Math.round(dayMs * SAFETY.night.quietScale);
+  const night = Math.max(shorter, SAFETY.night.minQuietMin * 60000);
+  return Math.min(night, dayMs);
+}
+
+/** "low" under 15%, "critical" under 5%, never while charging. */
+export function batteryBand(spot) {
+  if (!spot || spot.charging === true) return null;
+  if (spot.battBand === "low" || spot.battBand === "critical") return spot.battBand;
+  if (typeof spot.battery !== "number") return null;
+  if (spot.battery < SAFETY.battery.criticalPct) return "critical";
+  if (spot.battery < SAFETY.battery.lowPct) return "low";
+  return null;
+}
+
+/** Minutes off the planned route, from a 1.4.2 phone's "offSince". */
+export function offRouteMinutes(spot) {
+  if (!spot || typeof spot.offSince !== "number" || spot.offSince <= 0 || typeof spot.updatedAt !== "number" || spot.updatedAt < spot.offSince) return null;
+  return Math.floor((spot.updatedAt - spot.offSince) / 60000);
+}
+
+export function sosActive(spot) {
+  if (!spot || spot.paused === true || spot.checkin === "safe") return false;
+  return spot.checkin === "help" || spot.sosAt != null || spot.sos === true;
+}
+
+/** Same as exactPin in lib/route_find.dart. */
+const pinText = (lat, lng) => `${Math.abs(lat).toFixed(5)}° ${lat >= 0 ? "N" : "S"}, ${Math.abs(lng).toFixed(5)}° ${lng >= 0 ? "E" : "W"}`;
+export const mapPinUrl = (lat, lng) => `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lng.toFixed(6)}`;
+export const mapSearchUrl = (what, lat, lng) => `https://www.google.com/maps/search/${encodeURIComponent(what)}/@${lat.toFixed(5)},${lng.toFixed(5)},13z`;
+export const dialUrl = (number) => `tel:${String(number).replace(/[^0-9+]/g, "")}`;
+
+/** The SOS banner: who, the exact last location and its age, and the links. */
+export function sosBanner(spot, trip, now = Date.now()) {
+  if (!sosActive(spot)) return null;
+  const name = trip ? trip.name : t.webDriver();
+  const ok = typeof spot.lat === "number" && typeof spot.lng === "number";
+  const pin = ok ? pinText(spot.lat, spot.lng) : null;
+  const place = typeof spot.place === "string" && spot.place.trim() ? spot.place.trim() : null;
+  const where = pin == null ? place : place == null ? pin : `${place} (${pin})`;
+  const fix = typeof spot.fixAt === "number" ? spot.fixAt : typeof spot.updatedAt === "number" ? spot.updatedAt : null;
+  const age = fix == null ? null : now - fix < 60000 ? t.fixAgeNow() : t.fixAgeMin({ n: Math.floor((now - fix) / 60000) });
+  const phone = typeof spot.phone === "string" && spot.phone.trim() ? spot.phone.trim() : null;
+  return {
+    title: t.sosPressed({ name }),
+    body: where == null || age == null ? t.sosNoLocation() : t.sosBody({ where, age }),
+    sub: t.sosBannerSub({ name }),
+    call: phone ? { label: t.callName({ name }), href: dialUrl(phone) } : null,
+    noPhone: phone ? null : t.noPhoneShared({ name }),
+    map: ok ? { label: t.openMap(), href: mapPinUrl(spot.lat, spot.lng) } : null,
+  };
+}
+
+/** Help on the route for the family: the country's numbers (config/safety.json)
+ * and map searches near the vehicle's last position. Nothing is dialled by itself. */
+export function helpLinks(spot, country = "in") {
+  const c = SAFETY.countries[country] || SAFETY.countries.in;
+  const label = { emergency: t.dialEmergency, ambulance: t.dialAmbulance, highway: t.dialHighway };
+  const dial = (c.dial || []).map((n) => ({ label: `${(label[n.id] || t.dialOther)()} ${n.number}`, href: dialUrl(n.number) }));
+  const ok = spot && typeof spot.lat === "number" && typeof spot.lng === "number";
+  const search = ok
+    ? [
+        { label: t.webFindHospitals(), href: mapSearchUrl(t.webMapQueryHospital(), spot.lat, spot.lng) },
+        { label: t.webFindPolice(), href: mapSearchUrl(t.webMapQueryPolice(), spot.lat, spot.lng) },
+      ]
+    : [];
+  return { dial, search };
+}
+
+/** Same as cabLine in lib/safety.dart. */
+export function cabLine(cab) {
+  if (!cab || typeof cab !== "object") return null;
+  const s = (v) => (typeof v === "string" ? v.trim() : "");
+  const parts = [s(cab.operator), s(cab.plate) && t.cabPlateIs({ plate: s(cab.plate) }), s(cab.driver) && t.cabDriverIs({ name: s(cab.driver) })].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** Same as dayAndClock in lib/lang.dart, from this browser's day. */
+export function dayAndClock(at, now = Date.now()) {
+  const a = new Date(at), n = new Date(now);
+  const days = Math.round((Date.UTC(a.getFullYear(), a.getMonth(), a.getDate()) - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000);
+  const time = clock(at);
+  if (days === 0) return t.dayToday({ time });
+  if (days === 1) return t.dayTomorrow({ time });
+  if (days === -1) return t.dayYesterday({ time });
+  const weekday = t.weekdaysShort().split(" ")[(a.getDay() + 6) % 7];
+  const month = t.monthsShort().split(" ")[a.getMonth()];
+  return t.dayOn({ weekday, day: String(a.getDate()), month, time });
+}
+
 /** Same rule as deadAlertApplies in lib/assurance.dart. */
 export function deadAlertApplies(dead, spot) {
   if (!dead || typeof dead.lastAt !== "number") return false;
@@ -644,7 +747,14 @@ export function roadLines(spot, trip = null, now = Date.now()) {
   if (rain) lines.push(rain);
   const what = { fuel: t.stopFuel, food: t.stopFood, toll: t.stopToll }[spot.stopKind];
   if (what) lines.push(text("stopName") ? `${what()}: ${text("stopName")}` : what());
-  if (typeof spot.offKm === "number" && spot.offKm > 2) lines.push(t.offRouteNow());
+  const offMin = offRouteMinutes(spot);
+  if (offMin != null) lines.push(t.offRouteFor({ n: offMin }));
+  else if (!("offSince" in spot) && typeof spot.offKm === "number" && spot.offKm > 2) lines.push(t.offRouteNow());
+  const band = batteryBand(spot);
+  if (band === "critical") lines.push(t.battCriticalFamily({ pct: SAFETY.battery.criticalPct }));
+  else if (band === "low") lines.push(t.battLowFamily());
+  const cab = cabLine(spot.cab);
+  if (cab) lines.push(cab);
   if (text("via")) lines.push(t.routeVia({ road: text("via") }));
   const board = text("board");
   if (board === "longwait") lines.push(t.psLongWait({ n: typeof spot.updatedAt === "number" && trip && trip.start ? Math.max(0, Math.floor((spot.updatedAt - trip.start) / 60000)) : 0 }));
@@ -743,7 +853,9 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   const closed = spot.revoked || spot.interrupt === "closed";
   const speedText = closed ? null : speedLine(spot, now);
   const roads = closed ? [] : roadLines(spot, trip, now);
-  const out = (title, tone, sentence, live = false) => ({ title, tone, sentence: live ? sentence + low : sentence, lastUpdate: at, kmLeft, battery, charging, speed: speedText, roads });
+  const sos = closed ? null : sosBanner(spot, trip, now);
+  const help = closed ? null : helpLinks(spot);
+  const out = (title, tone, sentence, live = false) => ({ title, tone, sentence: live ? sentence + low : sentence, lastUpdate: at, kmLeft, battery, charging, speed: speedText, roads, sos, help });
   if (closed) {
     const end = endSentence(spot, trip, name, to);
     return end.arrived ? out("Arrived safely", "calm", end.sentence) : out("Tracking stopped", "quiet", end.sentence);
@@ -756,7 +868,11 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
     const weakGap = weakNear(weak, { lat: spot.lat, lng: spot.lng, points: trip && trip.points, km: spot.km });
     const expected = weakGap == null ? "" : ` ${t.weakHere({ n: weakGap })}`;
     const deadSays = deadAlertApplies(dead, spot);
-    if (now - at >= noUpdateAfter(Number(spot.every) || 0) || deadSays) return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery, kmLeft }) + expected);
+    if (now - at >= nightQuiet(noUpdateAfter(Number(spot.every) || 0), at) || deadSays) {
+      // Silence after a low battery is explained as such; night alerts come sooner.
+      const why = [batteryBand(spot) ? ` ${t.quietLowBattery()}` : "", nightAt(at) ? ` ${t.nightSooner()}` : ""].join("");
+      return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery, kmLeft }) + why + expected);
+    }
     return out("Signal gap", "quiet", (place ? t.jsGapAt({ dead: "", place, at: clock(at) }) : t.jsGap({ dead: "", at: clock(at) })) + expected);
   }
   const back = catchUpLine(spot.back, at, place);
