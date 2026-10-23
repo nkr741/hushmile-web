@@ -123,7 +123,6 @@ export const STRINGS = {
     stopFuel: (a = {}) => `Stopped at a fuel station`,
     stopFood: (a = {}) => `Stopped at a food place`,
     stopToll: (a = {}) => `At a toll plaza (not a delay)`,
-    stopNamed: (a = {}) => `${a.what}: ${a.name}`,
   },
   te: {
     privacy: (a = {}) => `గోప్యత`,
@@ -248,7 +247,6 @@ export const STRINGS = {
     stopFuel: (a = {}) => `పెట్రోల్ బంక్ దగ్గర ఆగారు`,
     stopFood: (a = {}) => `భోజనం/టీ చోట ఆగారు`,
     stopToll: (a = {}) => `టోల్ ప్లాజా దగ్గర (ఆలస్యం కాదు)`,
-    stopNamed: (a = {}) => `${a.what}: ${a.name}`,
   },
   hi: {
     privacy: (a = {}) => `निजता`,
@@ -373,6 +371,5 @@ export const STRINGS = {
     stopFuel: (a = {}) => `पेट्रोल पंप पर रुके हैं`,
     stopFood: (a = {}) => `खाने की जगह पर रुके हैं`,
     stopToll: (a = {}) => `टोल प्लाज़ा पर (देरी नहीं)`,
-    stopNamed: (a = {}) => `${a.what}: ${a.name}`,
   },
 };

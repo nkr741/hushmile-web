@@ -339,7 +339,7 @@ export function roadLines(spot, trip = null) {
   if (text("road")) lines.push(text("toward") ? t.roadOnTowards({ road: text("road"), place: text("toward") }) : t.roadOn({ road: text("road") }));
   if (spot.inArea === true) lines.push(t.endDetected());
   const what = { fuel: t.stopFuel, food: t.stopFood, toll: t.stopToll }[spot.stopKind];
-  if (what) lines.push(text("stopName") ? t.stopNamed({ what: what(), name: text("stopName") }) : what());
+  if (what) lines.push(text("stopName") ? `${what()}: ${text("stopName")}` : what());
   if (typeof spot.offKm === "number" && spot.offKm > 2) lines.push(t.offRouteNow());
   if (text("via")) lines.push(t.routeVia({ road: text("via") }));
   const board = text("board");
