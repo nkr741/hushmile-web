@@ -209,9 +209,44 @@ export async function latest(code, kind, since = "3h", fetcher = globalThis.fetc
   return latestOn(code, kind, since, fetcher, relays, null);
 }
 
+// After the first read of a channel, ask each relay only for what is newer
+// than the last message seen (since=<id>), as the app does: a minute's poll
+// is then a few bytes, not the whole window. Dead-phone alerts always read
+// the window, because a cancelled alert must disappear.
+const reads = new Map(); // relay|topic -> {lastId, best}
+// A relay that answered 429/503 is left alone for its Retry-After (when the
+// browser may read it), else a doubling backoff from 15 s, capped at 10 min.
+const resting = new Map(); // relay -> {until, strikes}
+export const BUSY_BASE_MS = 15000;
+export const BUSY_MAX_MS = 600000;
+
+export function busyWaitMs(retryAfter, strikes, now = Date.now()) {
+  const text = String(retryAfter ?? "").trim();
+  let told = null;
+  if (/^\d+$/.test(text)) told = Number(text) * 1000;
+  else if (text) {
+    const at = Date.parse(text);
+    if (!Number.isNaN(at)) told = Math.max(0, at - now);
+  }
+  const wait = told ?? BUSY_BASE_MS * 2 ** Math.min(5, strikes) + Math.floor(Math.random() * BUSY_BASE_MS);
+  return Math.min(BUSY_MAX_MS, wait);
+}
+
+export function relayResting(relay, now = Date.now()) {
+  const r = resting.get(relay);
+  return Boolean(r && now < r.until);
+}
+
+/** Tests: forget incremental reads and resting relays. */
+export function resetReads() {
+  reads.clear();
+  resting.clear();
+}
+
 async function latestOn(code, kind, since, fetcher, relays, link) {
   const topic = await topicFor(code, kind, link);
-  const answers = await Promise.allSettled(relays.map((relay) => readRelay(relay, topic, code, kind, since, fetcher, link)));
+  const awake = relays.filter((relay) => !relayResting(relay));
+  const answers = await Promise.allSettled((awake.length ? awake : relays).map((relay) => readRelay(relay, topic, code, kind, since, fetcher, link)));
   const ok = answers.filter((a) => a.status === "fulfilled").map((a) => a.value);
   if (!ok.length) throw answers[0].reason || new Error("relay");
   let best = null;
@@ -222,16 +257,28 @@ async function latestOn(code, kind, since, fetcher, relays, link) {
 }
 
 async function readRelay(relay, topic, code, kind, since, fetcher, link) {
-  const res = await fetcher(`${relay}/${topic}/json?poll=1&since=${since}`);
+  const key = `${relay}|${topic}`;
+  const kept = kind === "dead" ? null : reads.get(key);
+  const res = await fetcher(`${relay}/${topic}/json?poll=1&since=${encodeURIComponent(kept && kept.lastId ? kept.lastId : since)}`);
+  if (res.status === 429 || res.status === 503) {
+    const prev = resting.get(relay) || { strikes: 0 };
+    const header = res.headers && typeof res.headers.get === "function" ? res.headers.get("Retry-After") : null;
+    resting.set(relay, { until: Date.now() + busyWaitMs(header, prev.strikes), strikes: prev.strikes + 1 });
+  }
   if (!res.ok) throw new Error(`relay ${res.status}`);
+  resting.delete(relay);
   const text = await res.text();
-  let best = null;
-  let order = 0;
+  let best = kept ? kept.best : null;
+  let order = kept ? kept.order : 0;
+  let lastId = null;
+  let allIds = true;
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     let event;
     try { event = JSON.parse(line); } catch { continue; }
     if (event.event !== "message" || typeof event.message !== "string") continue;
+    if (typeof event.id === "string") lastId = event.id;
+    else allIds = false;
     const plain = await openFor(code, kind, event.message, link);
     if (plain == null) continue;
     let body;
@@ -240,6 +287,7 @@ async function readRelay(relay, topic, code, kind, since, fetcher, link) {
     if (body && typeof body === "object" && typeof event.time === "number") body.relayAt = event.time * 1000;
     if (!best || at[0] > best.at[0] || (at[0] === best.at[0] && at[1] > best.at[1])) best = { at, body };
   }
+  if (kind !== "dead" && allIds && (lastId || kept)) reads.set(key, { lastId: lastId || kept.lastId, best, order });
   return best;
 }
 
