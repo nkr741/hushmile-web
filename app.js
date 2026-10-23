@@ -1,10 +1,11 @@
-import { bareCode, clock, language, LANGUAGES, load, pickLanguage, setLanguage, shownCode, t } from "./hushmile-viewer.js";
+import { bareCode, clock, language, LANGUAGES, linkKeyText, load, mapAgeLine, pickLanguage, readInput, setLanguage, t } from "./hushmile-viewer.js";
 
 const bands = { calm: "toneCalm", checkin: "toneCheckin", help: "toneHelp", quiet: "toneQuiet" };
 const NAMES = { en: "English", te: "తెలుగు", hi: "हिन्दी" };
 const $ = (id) => document.getElementById(id);
 let timer = null;
 let current = null;
+let currentKey = null;
 let shownState = null;
 
 function readSaved() {
@@ -47,11 +48,65 @@ function show(state) {
   roads.replaceChildren(...(state.roads || []).map((line) => Object.assign(document.createElement("div"), { textContent: line })));
   roads.hidden = !(state.roads || []).length;
   $("battery").textContent = state.battery != null ? (state.charging ? t.batteryCharging({ n: state.battery }) : t.batteryPct({ n: state.battery })) : "";
+  drawMap(state.map || null);
+}
+
+// ---- Map (Leaflet + OpenStreetMap tiles, both loaded from this site / OSM) --
+// Blue line: the planned route. Grey dots: earlier places (the trail the
+// phone sent). The marker: the last known place, with how long ago.
+let map = null;
+let layers = null;
+let fitted = false;
+
+function drawMap(data) {
+  const box = $("map-box");
+  const L = globalThis.L;
+  if (!data || !L) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  if (!map) {
+    map = L.map("map", { zoomControl: true, attributionControl: true });
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      // OSM's tile policy asks for a Referer; send only the site, never a path.
+      referrerPolicy: "strict-origin",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+    map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
+    layers = L.layerGroup().addTo(map);
+  }
+  layers.clearLayers();
+  const bounds = [];
+  if (data.route.length > 1) {
+    L.polyline(data.route, { color: "#2d69fc", weight: 4, opacity: 0.55 }).addTo(layers);
+    bounds.push(...data.route);
+  }
+  for (const [lat, lng] of data.trail) {
+    L.circleMarker([lat, lng], { radius: 4, color: "#5f6673", fillColor: "#5f6673", fillOpacity: 0.8, weight: 1 }).addTo(layers);
+  }
+  if (data.last) {
+    const stale = data.last.at != null && Date.now() - data.last.at > 15 * 60000;
+    L.circleMarker([data.last.lat, data.last.lng], { radius: 9, color: "#fff", weight: 3, fillColor: stale ? "#5f6673" : "#2d69fc", fillOpacity: 1 })
+      .bindTooltip(mapAgeLine(data.last.at), { permanent: true, direction: "top", offset: [0, -10] })
+      .addTo(layers);
+    bounds.push([data.last.lat, data.last.lng]);
+  }
+  $("map-note").textContent = [data.route.length > 1 ? t.mapPlanned() : "", data.trail.length ? t.mapTrail() : ""].filter(Boolean).join(" ");
+  if (!fitted && bounds.length) {
+    // Fit once; after that keep the family's own zoom and pan.
+    if (bounds.length === 1) map.setView(bounds[0], 13);
+    else map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
+    fitted = true;
+  }
+  map.invalidateSize();
 }
 
 async function refresh(code) {
   try {
-    const state = await load(code);
+    // With the key from the link; a code-only link asks the server for it.
+    const state = await load(code, globalThis.fetch, Date.now(), currentKey || undefined);
     if (!state) {
       show({ tone: "quiet", sentence: t.codeNotOpen(), lastUpdate: null, kmLeft: null, battery: null });
       return;
@@ -62,12 +117,19 @@ async function refresh(code) {
   }
 }
 
-function start(code) {
-  if (bareCode(code).length !== 8) return;
-  const shown = shownCode(code);
+function start(input) {
+  const { code: shown, key } = readInput(input);
+  if (bareCode(shown).length !== 8) return;
+  if (shown !== current) {
+    fitted = false;
+    if (layers) layers.clearLayers();
+  }
   current = shown;
+  currentKey = key;
   $("code").value = shown;
-  if (location.hash.slice(1) !== shown) history.replaceState(null, "", `#${shown}`);
+  // Keep the link key in the address (old links have none; both work).
+  const hash = key ? `${shown}.${linkKeyText(key)}` : shown;
+  if (location.hash.slice(1) !== hash) history.replaceState(null, "", `#${hash}`);
   $("sentence").textContent = t.openingJourney();
   clearInterval(timer);
   refresh(shown);
@@ -94,4 +156,5 @@ setLanguage(pickLanguage(readSaved(), navigator.languages || [navigator.language
 paintPage();
 $("band").textContent = t.webJourney();
 $("sentence").textContent = t.webEnter();
-start(decodeURIComponent(location.hash.slice(1)));
+start(location.hash.slice(1));
+addEventListener("hashchange", () => start(location.hash.slice(1)));

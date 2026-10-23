@@ -36,7 +36,7 @@ test("a gap in, or just before, a weak cell reads as expected, in each language"
     assert.ok(hinted.sentence.startsWith(plain.sentence) && hinted.sentence.length > plain.sentence.length, lang);
   }
   setLanguage("en");
-  assert.match(viewState({ trip, spot, dead: null, now, weak }).sentence, /Signal is often weak here; gaps of about 15 minutes are usual/);
+  assert.match(viewState({ trip, spot, dead: null, now, weak }).sentence, /Signal is often weak here; gaps of about 15 minutes are normal/);
   // Heading into it from 5 km before.
   assert.equal(weakNear(weak, { lat: 17.33, lng: 78.95, points, km: 55 }), 15);
   // Not stale: no hint. Elsewhere: no hint.
