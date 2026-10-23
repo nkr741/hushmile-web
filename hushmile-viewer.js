@@ -1,6 +1,7 @@
 // Hushmile web viewer. Reads a journey from Hushmile's relay and ntfy.sh and decrypts it in the
-// browser. The trip code comes from the URL fragment (#ABCD-EFGH), which
-// browsers never send to the web server. Same steps as lib/seal.dart.
+// browser. The trip code (and, from app 1.4.1, the journey's link key) comes
+// from the URL fragment (#ABCD-EFGH or #ABCD-EFGH.KEY), which browsers never
+// send to the web server. Same steps as lib/seal.dart.
 
 import { STRINGS } from "./i18n.js";
 
@@ -30,6 +31,12 @@ export const t = new Proxy({}, { get: (_, key) => (args) => (STRINGS[lang][key] 
 export const KDF_ROUNDS = 150000;
 export const KDF_SALT = "hushmile-v2";
 export const SEAL_VERSION = 2;
+// Journey format 3 (app 1.4.1): a random 128-bit link key, after a dot in the
+// link (#ABCD-EFGH.KEY), mixed into the keys and channels. Links with only the
+// code ask Hushmile's server for the key (sealed with the code; rate-limited
+// there). Format 2 journeys (older apps) are still read. See the app's
+// docs/LINK_KEY.md.
+export const LINK_SEAL_VERSION = 3;
 // Relays (app 1.3.0+): Hushmile's own ntfy server first, ntfy.sh as the
 // fallback. The app writes each message to exactly one of them (ntfy.sh only
 // when ours does not take it), so the viewer reads both and keeps the newest,
@@ -59,24 +66,41 @@ async function hmac(keyBytes, text) {
 }
 
 const cache = new Map();
-
-export function keysFor(code) {
-  const bare = bareCode(code);
-  if (!cache.has(bare)) {
-    cache.set(bare, (async () => {
-      const base = await subtle.importKey("raw", enc.encode(bare), "PBKDF2", false, ["deriveBits"]);
-      const master = new Uint8Array(await subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: enc.encode(KDF_SALT), iterations: KDF_ROUNDS }, base, 256));
-      return { key: await hmac(master, "key"), seed: await hmac(master, "topic") };
-    })());
-  }
-  return cache.get(bare);
-}
-
+const masters = new Map();
 const hex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
-export async function topicFor(code, kind) {
-  const { seed } = await keysFor(code);
+function masterFor(bare) {
+  if (!masters.has(bare)) {
+    masters.set(bare, (async () => {
+      const base = await subtle.importKey("raw", enc.encode(bare), "PBKDF2", false, ["deriveBits"]);
+      return new Uint8Array(await subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: enc.encode(KDF_SALT), iterations: KDF_ROUNDS }, base, 256));
+    })());
+  }
+  return masters.get(bare);
+}
+
+/** With link (16 bytes), the format 3 keys for that link key. */
+export function keysFor(code, link = null) {
+  const bare = bareCode(code);
+  const tag = link ? `${bare}|${hex(link)}` : bare;
+  if (!cache.has(tag)) {
+    cache.set(tag, (async () => {
+      const master = await masterFor(bare);
+      if (!link) return { key: await hmac(master, "key"), seed: await hmac(master, "topic") };
+      return { key: await hmac(master, `key3:${hex(link)}`), seed: await hmac(master, `topic3:${hex(link)}`) };
+    })());
+  }
+  return cache.get(tag);
+}
+
+export async function topicFor(code, kind, link = null) {
+  const { seed } = await keysFor(code, link);
   return "h" + hex(await hmac(seed, "topic:" + kind)).slice(0, 32);
+}
+
+/** Where the server keeps this journey's sealed link key (lib/seal.dart linkKeyId). */
+export async function linkKeyId(code) {
+  return hex(await hmac(await masterFor(bareCode(code)), "linkkey-id")).slice(0, 32);
 }
 
 function fromB64url(text) {
@@ -92,27 +116,82 @@ function toB64url(bytes) {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-async function aesKey(code, usage) {
-  const { key } = await keysFor(code);
+async function aesKey(code, usage, link = null) {
+  const { key } = await keysFor(code, link);
   return subtle.importKey("raw", key, { name: "AES-GCM" }, false, [usage]);
 }
 
-export async function sealFor(code, kind, plain) {
+export function linkKeyText(bytes) {
+  return toB64url(bytes);
+}
+
+/** The 22 character text form back to 16 bytes; null when it is not one. */
+export function linkKeyFromText(text) {
+  const clean = String(text || "").trim();
+  if (!/^[A-Za-z0-9_-]{22}$/.test(clean)) return null;
+  try {
+    const bytes = fromB64url(clean);
+    return bytes.length === 16 ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
+/** "#ABCD-EFGH", "#ABCD-EFGH.KEY", a pasted link or a typed code: {code, key}. */
+export function readInput(raw) {
+  let text = String(raw || "").trim();
+  try { text = decodeURIComponent(text); } catch {}
+  const hash = text.lastIndexOf("#");
+  if (hash >= 0) text = text.slice(hash + 1);
+  const dot = text.indexOf(".");
+  const code = shownCode(dot >= 0 ? text.slice(0, dot) : text);
+  const key = dot >= 0 ? linkKeyFromText(text.slice(dot + 1)) : null;
+  return { code, key };
+}
+
+export const KEY_API = `${PRIMARY_RELAY}/v1/key`;
+const keyLookups = new Map();
+
+/** Family with only the code: the journey's link key from Hushmile's server,
+ * or null (an older journey without one, or no answer). Asked once a page. */
+export function lookUpLinkKey(code, fetcher = globalThis.fetch) {
+  const bare = bareCode(code);
+  if (!keyLookups.has(bare)) {
+    keyLookups.set(bare, (async () => {
+      try {
+        const res = await fetcher(`${KEY_API}?id=${await linkKeyId(code)}`);
+        if (!res.ok) {
+          if (res.status !== 404) keyLookups.delete(bare); // busy: ask again next minute
+          return null;
+        }
+        const body = await res.json();
+        const text = typeof body.box === "string" ? await openFor(code, "linkkey", body.box) : null;
+        return text ? linkKeyFromText(text) : null;
+      } catch {
+        keyLookups.delete(bare);
+        return null;
+      }
+    })());
+  }
+  return keyLookups.get(bare);
+}
+
+export async function sealFor(code, kind, plain, link = null) {
   const nonce = globalThis.crypto.getRandomValues(new Uint8Array(12));
-  const box = new Uint8Array(await subtle.encrypt({ name: "AES-GCM", iv: nonce, additionalData: enc.encode(`${KDF_SALT}:${kind}`) }, await aesKey(code, "encrypt"), enc.encode(plain)));
+  const box = new Uint8Array(await subtle.encrypt({ name: "AES-GCM", iv: nonce, additionalData: enc.encode(`${KDF_SALT}:${kind}`) }, await aesKey(code, "encrypt", link), enc.encode(plain)));
   const out = new Uint8Array(1 + 12 + box.length);
-  out[0] = SEAL_VERSION;
+  out[0] = link ? LINK_SEAL_VERSION : SEAL_VERSION;
   out.set(nonce, 1);
   out.set(box, 13);
   return toB64url(out);
 }
 
 /** Null for a wrong code, a wrong kind, or changed text. */
-export async function openFor(code, kind, sealed) {
+export async function openFor(code, kind, sealed, link = null) {
   try {
     const raw = fromB64url(sealed);
-    if (raw.length < 29 || raw[0] !== SEAL_VERSION) return null;
-    const clear = await subtle.decrypt({ name: "AES-GCM", iv: raw.slice(1, 13), additionalData: enc.encode(`${KDF_SALT}:${kind}`) }, await aesKey(code, "decrypt"), raw.slice(13));
+    if (raw.length < 29 || raw[0] !== (link ? LINK_SEAL_VERSION : SEAL_VERSION)) return null;
+    const clear = await subtle.decrypt({ name: "AES-GCM", iv: raw.slice(1, 13), additionalData: enc.encode(`${KDF_SALT}:${kind}`) }, await aesKey(code, "decrypt", link), raw.slice(13));
     return dec.decode(clear);
   } catch {
     return null;
@@ -121,9 +200,18 @@ export async function openFor(code, kind, sealed) {
 
 /** Newest readable message on a channel across all relays, parsed, or null.
  * Throws only when no relay answered. */
-export async function latest(code, kind, since = "3h", fetcher = globalThis.fetch, relays = RELAYS) {
-  const topic = await topicFor(code, kind);
-  const answers = await Promise.allSettled(relays.map((relay) => readRelay(relay, topic, code, kind, since, fetcher)));
+export async function latest(code, kind, since = "3h", fetcher = globalThis.fetch, relays = RELAYS, link = null) {
+  if (link) {
+    // Format 3 first; nothing there means a journey from an older app.
+    const strong = await latestOn(code, kind, since, fetcher, relays, link);
+    if (strong != null) return strong;
+  }
+  return latestOn(code, kind, since, fetcher, relays, null);
+}
+
+async function latestOn(code, kind, since, fetcher, relays, link) {
+  const topic = await topicFor(code, kind, link);
+  const answers = await Promise.allSettled(relays.map((relay) => readRelay(relay, topic, code, kind, since, fetcher, link)));
   const ok = answers.filter((a) => a.status === "fulfilled").map((a) => a.value);
   if (!ok.length) throw answers[0].reason || new Error("relay");
   let best = null;
@@ -133,7 +221,7 @@ export async function latest(code, kind, since = "3h", fetcher = globalThis.fetc
   return best ? best.body : null;
 }
 
-async function readRelay(relay, topic, code, kind, since, fetcher) {
+async function readRelay(relay, topic, code, kind, since, fetcher, link) {
   const res = await fetcher(`${relay}/${topic}/json?poll=1&since=${since}`);
   if (!res.ok) throw new Error(`relay ${res.status}`);
   const text = await res.text();
@@ -144,7 +232,7 @@ async function readRelay(relay, topic, code, kind, since, fetcher) {
     let event;
     try { event = JSON.parse(line); } catch { continue; }
     if (event.event !== "message" || typeof event.message !== "string") continue;
-    const plain = await openFor(code, kind, event.message);
+    const plain = await openFor(code, kind, event.message, link);
     if (plain == null) continue;
     let body;
     try { body = JSON.parse(plain); } catch { continue; }
@@ -322,6 +410,8 @@ export function delayReason({ stillMin, stopsMin, paceKmh, plannedKmh, driverSai
   if (driverSaid === "fuel") return t.rsFuel();
   // Traffic measured by Google on the traveller's phone (app 1.4.0), with the slow place.
   if (why === "traffic") return whyPlace ? t.rsTrafficNear({ place: whyPlace }) : t.rsTrafficRoute();
+  // Heavy rain measured where the traveller is (app 1.4.1, Open-Meteo).
+  if (why === "rain") return t.rsRain();
   // Waiting at a toll plaza is part of the road, not a stop.
   if (stillMin >= 10 && stopKind !== "toll") return stopPlace ? t.rsStoppedNear({ n: stillMin, place: stopPlace }) : t.rsStopped({ n: stillMin });
   if (paceKmh != null && plannedKmh > 0 && paceKmh < plannedKmh * 0.8) return t.rsSlow({ pace: paceKmh, plan: Math.round(plannedKmh) });
@@ -332,12 +422,36 @@ export function delayReason({ stillMin, stopsMin, paceKmh, plannedKmh, driverSai
 
 /** Road facts from app 1.4.0, each as of the last update: the road, the
  * route, a different route, a passenger's boarding state. Empty for older phones. */
-export function roadLines(spot, trip = null) {
+/** "About 8 km past Narkatpalli" (app 1.4.1, lib/route_context.dart landmarkLine). */
+export function landmarkLine(spot) {
+  const name = spot && typeof spot.lm === "string" ? spot.lm.trim() : "";
+  if (!name) return null;
+  const k = typeof spot.lmKm === "number" ? spot.lmKm : null;
+  const kmText = k == null ? null : k < 1 ? "1" : k < 10 ? String(Math.round(k * 10) / 10) : String(Math.round(k));
+  if (spot.lmRel === "past" && kmText) return t.lmPast({ km: kmText, place: name });
+  if (spot.lmRel === "before" && kmText) return t.lmBefore({ km: kmText, place: name });
+  if (spot.lmRel === "near" && kmText) return t.lmNear({ km: kmText, place: name });
+  return t.lmIn({ place: name });
+}
+
+/** Heavy rain where the traveller is, with its age (lib/route_context.dart rainLine). */
+export const RAIN_SHOWN_FOR_MS = 90 * 60000;
+export function rainLine(spot, now = Date.now()) {
+  const at = spot && spot.rain && typeof spot.rain.at === "number" ? spot.rain.at : null;
+  if (at == null || now - at > RAIN_SHOWN_FOR_MS) return null;
+  return t.rainNote({ n: Math.max(0, Math.floor((now - at) / 60000)) });
+}
+
+export function roadLines(spot, trip = null, now = Date.now()) {
   if (!spot) return [];
   const lines = [];
   const text = (k) => (typeof spot[k] === "string" ? spot[k].trim() : "");
   if (text("road")) lines.push(text("toward") ? t.roadOnTowards({ road: text("road"), place: text("toward") }) : t.roadOn({ road: text("road") }));
   if (spot.inArea === true) lines.push(t.endDetected());
+  const near = landmarkLine(spot);
+  if (near) lines.push(near);
+  const rain = rainLine(spot, now);
+  if (rain) lines.push(rain);
   const what = { fuel: t.stopFuel, food: t.stopFood, toll: t.stopToll }[spot.stopKind];
   if (what) lines.push(text("stopName") ? `${what()}: ${text("stopName")}` : what());
   if (typeof spot.offKm === "number" && spot.offKm > 2) lines.push(t.offRouteNow());
@@ -438,7 +552,7 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   const low = battery != null && !charging && battery < 10 ? ` ${t.jsBatteryLow({ n: battery })}` : "";
   const closed = spot.revoked || spot.interrupt === "closed";
   const speedText = closed ? null : speedLine(spot, now);
-  const roads = closed ? [] : roadLines(spot, trip);
+  const roads = closed ? [] : roadLines(spot, trip, now);
   const out = (title, tone, sentence, live = false) => ({ title, tone, sentence: live ? sentence + low : sentence, lastUpdate: at, kmLeft, battery, charging, speed: speedText, roads });
   if (closed) {
     const end = endSentence(spot, trip, name, to);
@@ -483,8 +597,33 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
 
 // ---- Page ------------------------------------------------------------------
 
-export async function load(code, fetcher = globalThis.fetch, now = Date.now()) {
-  const [tripBody, spot, dead] = await Promise.all([latest(code, "trip", "12h", fetcher), latest(code, "spot", "3h", fetcher), latest(code, "dead", "3h", fetcher).catch(() => null)]);
+/** What the map shows: the planned route, the recent trail and the last known
+ * place with its time. Nothing that was not in the journey's own messages. */
+export function mapData(trip, spot) {
+  const route = trip && Array.isArray(trip.points) ? trip.points : [];
+  const at = spot && typeof spot.updatedAt === "number" ? spot.updatedAt : null;
+  const ok = (lat, lng) => typeof lat === "number" && typeof lng === "number" && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  const trail = [];
+  if (spot && Array.isArray(spot.trail) && at != null) {
+    for (const p of spot.trail) {
+      if (Array.isArray(p) && p.length >= 3 && ok(p[0], p[1]) && typeof p[2] === "number") trail.push([p[0], p[1], at - p[2] * 1000]);
+    }
+  }
+  const last = spot && ok(spot.lat, spot.lng) && !spot.revoked ? { lat: spot.lat, lng: spot.lng, at } : null;
+  if (!route.length && !trail.length && !last) return null;
+  return { route, trail, last };
+}
+
+/** "Last known place, 12 min ago" for the map marker. */
+export function mapAgeLine(at, now = Date.now()) {
+  if (at == null) return "";
+  return t.mapLastKnown({ ago: t.minAgo({ n: Math.max(0, Math.floor((now - at) / 60000)) }) });
+}
+
+/** link: the key from the page's link; undefined means "ask the server". */
+export async function load(code, fetcher = globalThis.fetch, now = Date.now(), link = undefined) {
+  const key = link === undefined ? await lookUpLinkKey(code, fetcher) : link;
+  const [tripBody, spot, dead] = await Promise.all([latest(code, "trip", "12h", fetcher, RELAYS, key), latest(code, "spot", "3h", fetcher, RELAYS, key), latest(code, "dead", "3h", fetcher, RELAYS, key).catch(() => null)]);
   const trip = readTrip(tripBody);
   if (!trip && !spot) return null;
   const closedTrip = Boolean(tripBody && tripBody.revoked);
@@ -494,5 +633,6 @@ export async function load(code, fetcher = globalThis.fetch, now = Date.now()) {
     const weak = await weakCellsForTrip(trip, fetcher, now).catch(() => ({}));
     if (Object.keys(weak).length) state = viewState({ trip, spot, dead, now, closedTrip, weak });
   }
+  state.map = mapData(trip, spot);
   return state;
 }
