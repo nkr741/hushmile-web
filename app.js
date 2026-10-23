@@ -47,8 +47,33 @@ function show(state) {
   const roads = $("roads");
   roads.replaceChildren(...(state.roads || []).map((line) => Object.assign(document.createElement("div"), { textContent: line })));
   roads.hidden = !(state.roads || []).length;
+  paintSos(state.sos || null);
+  paintHelp(state.help || null);
   $("battery").textContent = state.battery != null ? (state.charging ? t.batteryCharging({ n: state.battery }) : t.batteryPct({ n: state.battery })) : "";
   drawMap(state.map || null);
+}
+
+const link = ({ label, href }) => Object.assign(document.createElement("a"), { textContent: label, href, rel: "noopener" });
+
+/** The SOS banner, until the traveller taps "I'm safe now". */
+function paintSos(sos) {
+  $("sos").hidden = !sos;
+  if (!sos) return;
+  $("sos-title").textContent = sos.title;
+  $("sos-body").textContent = sos.body;
+  $("sos-sub").textContent = sos.noPhone ? `${sos.sub} ${sos.noPhone}` : sos.sub;
+  $("sos-links").replaceChildren(...[sos.call, sos.map].filter(Boolean).map(link));
+}
+
+/** Help on the route: dial links (the phone's dialler opens; nothing is
+ * called by itself) and map searches near the last position. */
+function paintHelp(help) {
+  $("help").hidden = !help;
+  if (!help) return;
+  $("help-title").textContent = t.helpOnRoute();
+  $("help-links").replaceChildren(...help.dial.map(link));
+  $("help-search").replaceChildren(...help.search.map(link));
+  $("help-note").textContent = t.dialNote();
 }
 
 // ---- Map (Leaflet + OpenStreetMap tiles, both loaded from this site / OSM) --
