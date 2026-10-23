@@ -343,11 +343,64 @@ export function catchUpLine(back, at, place) {
 }
 
 /** {title, tone, sentence, lastUpdate, kmLeft, battery, charging} for what the family should read. */
+// ---- How a journey ended (port of lib/journey_end.dart) ---------------------
+
+const metresApart = (a, b) => km(a, b) * 1000;
+
+/** Same as atDestination in lib/journey_end.dart (nearRadiusM in arrival.dart). */
+function atDestination(trip, lat, lng, accuracyM) {
+  if (!trip || !Array.isArray(trip.points) || !trip.points.length) return true;
+  const end = trip.points[trip.points.length - 1];
+  const radius = Math.min(800, Math.max(300, (trip.totalKm || 0) * 5));
+  return metresApart([lat, lng], end) - Math.min(accuracyM, 100) <= radius;
+}
+
+/** The closing sentence: arrived only when confirmed at the destination;
+ * otherwise who ended it, where and when; or that the code expired. */
+export function endSentence(spot, trip, name, to) {
+  const at = typeof spot.endAt === "number" ? spot.endAt : typeof spot.at === "number" ? spot.at : null;
+  const place = typeof spot.endPlace === "string" && spot.endPlace ? spot.endPlace : typeof spot.place === "string" && spot.place ? spot.place : null;
+  let reason = ["arrived", "ended", "expired"].includes(spot.end) ? spot.end : null;
+  let saidArrived = spot.endSaid === "arrived";
+  let away = typeof spot.endAwayKm === "number" ? spot.endAwayKm : null;
+  if (!reason) {
+    reason = spot.arrived ? "arrived" : "ended";
+    // An older phone's "arrived" far from the destination is not an arrival.
+    if (reason === "arrived" && typeof spot.lat === "number" && typeof spot.lng === "number" && trip && !atDestination(trip, spot.lat, spot.lng, 100)) {
+      reason = "ended";
+      saidArrived = true;
+      const end = trip.points[trip.points.length - 1];
+      away = metresApart([spot.lat, spot.lng], end) / 1000;
+    }
+  }
+  if (reason === "arrived") return { arrived: true, sentence: t.jsArrived({ name }) };
+  if (reason === "expired") return { arrived: false, sentence: t.jsExpired() };
+  if (at == null) return { arrived: false, sentence: spot.revoked ? t.webEnded() : t.jsEndedEarly() };
+  if (saidArrived && away != null) return { arrived: false, sentence: t.endedSaidArrived({ name, time: clock(at), km: away < 10 ? away.toFixed(1) : String(Math.round(away)), to }) };
+  if (place) return { arrived: false, sentence: t.endedNearAt({ name, place, time: clock(at) }) };
+  return { arrived: false, sentence: t.endedAtTime({ name, time: clock(at) }) };
+}
+
+/** Speed at the last update and the average while moving (lib/speed.dart);
+ * null for points from older phones. Shown with its age, never as live. */
+export function speedLine(spot, now = Date.now()) {
+  if (!spot || typeof spot.kmh !== "number" || !(spot.kmh >= 0) || spot.kmh > 400) return null;
+  const at = typeof spot.kmhAt === "number" ? spot.kmhAt : typeof spot.updatedAt === "number" ? spot.updatedAt : null;
+  const value = spot.kmh === 0 ? t.speedStopped() : t.speedNow({ kmh: Math.round(spot.kmh) });
+  const ago = at == null ? null : now - at < 60000 ? t.speedJustNow() : t.minAgo({ n: Math.floor((now - at) / 60000) });
+  const line = ago ? t.speedAt({ speed: value, ago }) : value;
+  const avg = typeof spot.avgKmh === "number" && spot.avgKmh > 0 ? t.speedAvg({ kmh: Math.round(spot.avgKmh) }) : null;
+  return avg ? `${line} · ${avg}` : line;
+}
+
 export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = false, weak = null }) {
   const name = trip ? trip.name : t.webDriver();
   const to = trip ? trip.to : t.webDestination();
   if (!spot || typeof spot.km !== "number") {
-    if (closedTrip || (spot && spot.revoked)) return { title: "Tracking stopped", tone: "quiet", sentence: spot && spot.arrived ? t.jsArrived({ name }) : t.webEnded(), lastUpdate: null, kmLeft: null, battery: null, charging: false };
+    if (closedTrip || (spot && spot.revoked)) {
+      const end = spot ? endSentence(spot, trip, name, to) : { arrived: false, sentence: t.webEnded() };
+      return { title: end.arrived ? "Arrived safely" : "Tracking stopped", tone: end.arrived ? "calm" : "quiet", sentence: end.sentence, lastUpdate: null, kmLeft: null, battery: null, charging: false, speed: null };
+    }
     return { title: "Waiting for a location", tone: "quiet", sentence: t.jsWaiting(), lastUpdate: null, kmLeft: trip ? trip.totalKm : null, battery: null, charging: false };
   }
   const at = typeof spot.updatedAt === "number" ? spot.updatedAt : null;
@@ -358,9 +411,12 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   const charging = spot.charging === true;
   // Under 10% and not charging: one calm warning on any live status.
   const low = battery != null && !charging && battery < 10 ? ` ${t.jsBatteryLow({ n: battery })}` : "";
-  const out = (title, tone, sentence, live = false) => ({ title, tone, sentence: live ? sentence + low : sentence, lastUpdate: at, kmLeft, battery, charging });
-  if (spot.revoked || spot.interrupt === "closed") {
-    return spot.arrived ? out("Arrived safely", "calm", t.jsArrived({ name })) : out("Tracking stopped", "quiet", t.jsEndedEarly());
+  const closed = spot.revoked || spot.interrupt === "closed";
+  const speedText = closed ? null : speedLine(spot, now);
+  const out = (title, tone, sentence, live = false) => ({ title, tone, sentence: live ? sentence + low : sentence, lastUpdate: at, kmLeft, battery, charging, speed: speedText });
+  if (closed) {
+    const end = endSentence(spot, trip, name, to);
+    return end.arrived ? out("Arrived safely", "calm", end.sentence) : out("Tracking stopped", "quiet", end.sentence);
   }
   if (spot.checkin === "help" || (spot.sos === true && spot.checkin !== "safe")) return out("Needs help", "help", place ? t.jsHelpAt({ name, place }) : t.jsHelp({ name }));
   if (spot.paused) return out("Sharing paused", "quiet", t.jsPaused({ name }));
