@@ -618,10 +618,24 @@ export function rainLine(spot, now = Date.now()) {
   return t.rainNote({ n: Math.max(0, Math.floor((now - at) / 60000)) });
 }
 
+/** "Taking a break, replied 2 min ago" (app 1.4.1, lib/assurance.dart repliedLine):
+ * a reply from the app or from the check-in notification's buttons. */
+const REPLY = { ok: "replyFine", break: "replyBreak", traffic: "replyTraffic" };
+export function repliedLine(spot, now = Date.now()) {
+  const said = spot && typeof spot.checkin === "string" ? spot.checkin : null;
+  const at = spot && typeof spot.repliedAt === "number" ? spot.repliedAt : null;
+  if (!said || at == null || said === "help" || said === "safe") return null;
+  const what = REPLY[said] ? t[REPLY[said]]() : checkinLabel(said);
+  const ago = now - at < 60000 ? t.speedJustNow() : t.minAgo({ n: Math.floor((now - at) / 60000) });
+  return t.repliedAgo({ what, ago });
+}
+
 export function roadLines(spot, trip = null, now = Date.now()) {
   if (!spot) return [];
   const lines = [];
   const text = (k) => (typeof spot[k] === "string" ? spot[k].trim() : "");
+  const replied = repliedLine(spot, now);
+  if (replied) lines.push(replied);
   if (text("road")) lines.push(text("toward") ? t.roadOnTowards({ road: text("road"), place: text("toward") }) : t.roadOn({ road: text("road") }));
   if (spot.inArea === true) lines.push(t.endDetected());
   const near = landmarkLine(spot);

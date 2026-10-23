@@ -132,6 +132,10 @@ export const STRINGS = {
     rainNote: (a = {}) => `Heavy rain where they are (checked ${a.n} min ago). Roads are slower in rain.`,
     rsRain: (a = {}) => `Heavy rain on the way.`,
     mapPlanned: (a = {}) => `Blue line: the planned route.`,
+    replyFine: (a = {}) => `All fine`,
+    replyBreak: (a = {}) => `Taking a break`,
+    replyTraffic: (a = {}) => `Stuck in traffic`,
+    repliedAgo: (a = {}) => `${a.what}, replied ${a.ago}`,
   },
   te: {
     privacy: (a = {}) => `గోప్యత`,
@@ -265,6 +269,10 @@ export const STRINGS = {
     rainNote: (a = {}) => `వాళ్లు ఉన్న చోట భారీ వర్షం (${a.n} నిమిషాల క్రితం చూసింది). వర్షంలో ప్రయాణం నెమ్మదిగా సాగుతుంది.`,
     rsRain: (a = {}) => `దారిలో భారీ వర్షం.`,
     mapPlanned: (a = {}) => `నీలి గీత: అనుకున్న దారి.`,
+    replyFine: (a = {}) => `అంతా బాగుంది`,
+    replyBreak: (a = {}) => `విరామం తీసుకుంటున్నారు`,
+    replyTraffic: (a = {}) => `ట్రాఫిక్‌లో ఉన్నారు`,
+    repliedAgo: (a = {}) => `${a.what}, జవాబు ${a.ago}`,
   },
   hi: {
     privacy: (a = {}) => `निजता`,
@@ -398,5 +406,9 @@ export const STRINGS = {
     rainNote: (a = {}) => `जहाँ वे हैं वहाँ तेज़ बारिश है (${a.n} मिनट पहले देखा)। बारिश में सफ़र धीमा होता है।`,
     rsRain: (a = {}) => `रास्ते में तेज़ बारिश।`,
     mapPlanned: (a = {}) => `नीली लाइन: तय रास्ता।`,
+    replyFine: (a = {}) => `सब ठीक`,
+    replyBreak: (a = {}) => `थोड़ा रुके हैं`,
+    replyTraffic: (a = {}) => `ट्रैफ़िक में फँसे हैं`,
+    repliedAgo: (a = {}) => `${a.what}, जवाब ${a.ago}`,
   },
 };

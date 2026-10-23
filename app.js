@@ -80,15 +80,15 @@ function drawMap(data) {
   layers.clearLayers();
   const bounds = [];
   if (data.route.length > 1) {
-    L.polyline(data.route, { color: "#2f6bff", weight: 4, opacity: 0.55 }).addTo(layers);
+    L.polyline(data.route, { color: "#2d69fc", weight: 4, opacity: 0.55 }).addTo(layers);
     bounds.push(...data.route);
   }
   for (const [lat, lng] of data.trail) {
-    L.circleMarker([lat, lng], { radius: 4, color: "#7a8494", fillColor: "#7a8494", fillOpacity: 0.8, weight: 1 }).addTo(layers);
+    L.circleMarker([lat, lng], { radius: 4, color: "#5f6673", fillColor: "#5f6673", fillOpacity: 0.8, weight: 1 }).addTo(layers);
   }
   if (data.last) {
     const stale = data.last.at != null && Date.now() - data.last.at > 15 * 60000;
-    L.circleMarker([data.last.lat, data.last.lng], { radius: 9, color: "#fff", weight: 3, fillColor: stale ? "#7a8494" : "#2f6bff", fillOpacity: 1 })
+    L.circleMarker([data.last.lat, data.last.lng], { radius: 9, color: "#fff", weight: 3, fillColor: stale ? "#5f6673" : "#2d69fc", fillOpacity: 1 })
       .bindTooltip(mapAgeLine(data.last.at), { permanent: true, direction: "top", offset: [0, -10] })
       .addTo(layers);
     bounds.push([data.last.lat, data.last.lng]);

@@ -67,3 +67,18 @@ test("stop context lines; a toll plaza wait is not given as the delay", () => {
   assert.equal(delayReason({ stillMin: 14, stopsMin: 0, paceKmh: null, plannedKmh: 60, stopKind: "toll" }), null);
   assert.match(delayReason({ stillMin: 14, stopsMin: 0, paceKmh: null, plannedKmh: 60, stopKind: "fuel" }), /^Stopped for 14/);
 });
+
+test("a check-in reply shows as a status with its age (app 1.4.1 quick replies)", async () => {
+  const { repliedLine } = await import("../hushmile-viewer.js");
+  setLanguage("en");
+  const now = 1_700_000_000_000;
+  assert.equal(repliedLine({ checkin: "break", repliedAt: now - 2 * 60000 }, now), "Taking a break, replied 2 min ago");
+  assert.equal(repliedLine({ checkin: "traffic", repliedAt: now - 10000 }, now), "Stuck in traffic, replied just now");
+  assert.equal(repliedLine({ checkin: "ok", repliedAt: now - 5 * 60000 }, now), "All fine, replied 5 min ago");
+  assert.equal(repliedLine({ checkin: "help", repliedAt: now }, now), null);
+  assert.equal(repliedLine({ checkin: "break" }, now), null);
+  assert.deepEqual(roadLines({ checkin: "break", repliedAt: now - 60000 }, null, now), ["Taking a break, replied 1 min ago"]);
+  setLanguage("hi");
+  assert.equal(repliedLine({ checkin: "break", repliedAt: now - 3 * 60000 }, now), "थोड़ा रुके हैं, जवाब 3 मिनट पहले");
+  setLanguage("en");
+});
