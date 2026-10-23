@@ -1,7 +1,7 @@
 // node --test test/  — journey format 3 (link key), its migration, and the map.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { KEY_API, landmarkLine, latest, linkKeyFromText, linkKeyId, linkKeyText, load, lookUpLinkKey, mapAgeLine, mapData, openFor, rainLine, readInput, sealFor, setLanguage, topicFor } from "../hushmile-viewer.js";
+import { ESCROW_N, KEY_API, KEY_LOOK_AGAIN_MS, escrowId, landmarkLine, latest, linkKeyFromText, linkKeyText, load, lookUpLinkKey, mapAgeLine, mapData, openFor, rainLine, readInput, scrypt, sealFor, setLanguage, topicFor, unwrapLinkKey, wrapLinkKey } from "../hushmile-viewer.js";
 
 const CODE = "AB23-CD45";
 const KEY = Uint8Array.from({ length: 16 }, (_, i) => i);
@@ -9,12 +9,23 @@ const KEY = Uint8Array.from({ length: 16 }, (_, i) => i);
 test("same keys and channels as the app (lib/seal.dart, vectors from Dart)", async () => {
   assert.equal(await topicFor(CODE, "spot", KEY), "h5325c6a6c7170d172ae36f4d69329f07");
   assert.equal(await topicFor(CODE, "spot"), "hcc0ec2c17c4997df3888b8da77ad6080");
-  assert.equal(await linkKeyId(CODE), "8d3e396e17b14b2189c2af5f7f669794");
+  assert.equal(await escrowId(CODE), "9a0c894140099b46eff8b36a297b2442");
+  // An escrow box made by the app (lib/linkkey.dart) opens here with the code only.
+  const fromApp = { salt: "gU71JXWA-3nBx4j1_VpHtw", box: "-P-52BGqwTJOf27FD14FR8JKpUDwvorZOuYO4ACOtgt2DOf_CC0MZ7IVlgVxPpDtDz0" };
+  assert.deepEqual([...(await unwrapLinkKey(CODE, fromApp))], [...KEY]);
+  assert.equal(await unwrapLinkKey("ZZ99-ZZ99", fromApp), null);
   assert.equal(linkKeyText(KEY), "AAECAwQFBgcICQoLDA0ODw");
   // A box sealed by the app (format 3) opens here with the key, never without.
   const box = "AxxZCIVZb44zVus06i7ZW45kLAQv9aU5eGS8b6AxyvfhTFi2-Q";
   assert.equal(await openFor(CODE, "spot", box, KEY), '{"km":7}');
   assert.equal(await openFor(CODE, "spot", box), null);
+});
+
+test("scrypt matches RFC 7914 and the app's vectors", async () => {
+  const h = (b) => Buffer.from(b).toString("hex");
+  const te = new TextEncoder();
+  assert.equal(h(await scrypt(new Uint8Array(), new Uint8Array(), 16, 1, 1, 64)), "77d6576238657b203b19ca42c18a0497f16b4844e3074ae8dfdffa3fede21442fcd0069ded0948f8326a753a0fc81f17e8d3e0fb2e0d3628cf35e20c38d18906");
+  assert.equal(h(await scrypt(te.encode("AB23CD45"), Uint8Array.from({ length: 16 }, (_, i) => i), ESCROW_N)), "7e8e2dcf17bff610cd7e1953067a309983e11f2fc2f860765dfb8ea4e66d9b38");
 });
 
 test("reading the link: old #CODE links and new #CODE.KEY links", () => {
@@ -32,18 +43,23 @@ function relayWith(messages) {
   // messages: {topic: [sealed, ...]}; the key server answers from `boxes`.
   return (boxes = {}) => {
     const asked = [];
-    const fetcher = async (url) => {
+    const posted = [];
+    const fetcher = async (url, opts = {}) => {
       asked.push(url);
       const u = new URL(url);
+      if (opts.method === "POST") {
+        posted.push({ topic: u.pathname.split("/")[1], body: opts.body });
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
       if (url.startsWith(KEY_API)) {
         const box = boxes[u.searchParams.get("id")];
-        return box ? { ok: true, status: 200, json: async () => ({ box }) } : { ok: false, status: 404, json: async () => ({}) };
+        return box ? { ok: true, status: 200, json: async () => box } : { ok: false, status: 404, json: async () => ({}) };
       }
       const topic = u.pathname.split("/")[1];
       const body = (messages[topic] || []).map((m, i) => JSON.stringify({ event: "message", time: 10 + i, message: m })).join("\n");
       return { ok: true, status: 200, text: async () => body };
     };
-    return { fetcher, asked };
+    return { fetcher, asked, posted };
   };
 }
 
@@ -61,22 +77,35 @@ test("link path: a format 3 journey opens with the key from the link", async () 
   const state = await load(CODE, fetcher, now, KEY);
   assert.equal(state.kmLeft, 60);
   assert.ok(!asked.some((u) => u.startsWith(KEY_API)), "a link with the key never asks the server");
+  assert.ok(!asked.some((u) => u.includes("firebase=no")), "a link with the key sends no 'seen' on the old channel");
   assert.equal(await latest(CODE, "spot", "3h", fetcher), null, "points are not on the old channel");
 });
 
-test("code path: a code-only link gets the key from the server (sealed with the code)", async () => {
+test("code path: a code-only page tells the phone, then gets the scrypt-wrapped key", async () => {
   const messages = {
     [await topicFor(CODE, "trip", KEY)]: [await sealFor(CODE, "trip", JSON.stringify(tripBody), KEY)],
+    [await topicFor(CODE, "trip")]: [await sealFor(CODE, "trip", JSON.stringify(tripBody))],
     [await topicFor(CODE, "spot", KEY)]: [await sealFor(CODE, "spot", JSON.stringify(spotBody), KEY)],
   };
-  const boxes = { [await linkKeyId(CODE)]: await sealFor(CODE, "linkkey", linkKeyText(KEY)) };
-  const { fetcher, asked } = relayWith(messages)(boxes);
-  const state = await load(CODE, fetcher, now);
-  assert.equal(state.kmLeft, 60);
+  const boxes = {};
+  const { fetcher, asked, posted } = relayWith(messages)(boxes);
+  // No box yet: the route shows (old channel), and the page says "seen" on the old channel.
+  const first = await load(CODE, fetcher, now);
+  assert.ok(first);
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0].topic, await topicFor(CODE, "seen"));
+  assert.deepEqual(Object.keys(JSON.parse(await openFor(CODE, "seen", posted[0].body))).sort(), ["at", "seen"]);
+  // The phone escrows; a minute later the page does not ask yet (rate limit)...
+  boxes[await escrowId(CODE)] = await wrapLinkKey(CODE, KEY);
+  await load(CODE, fetcher, now + 60000);
   assert.equal(asked.filter((u) => u.startsWith(KEY_API)).length, 1);
-  // Asked once per page.
-  await load(CODE, fetcher, now);
-  assert.equal(asked.filter((u) => u.startsWith(KEY_API)).length, 1);
+  // ...after KEY_LOOK_AGAIN_MS it does, and reads the format 3 points.
+  const later = await load(CODE, fetcher, now + KEY_LOOK_AGAIN_MS + 1);
+  assert.equal(later.kmLeft, 60);
+  assert.equal(asked.filter((u) => u.startsWith(KEY_API)).length, 2);
+  // Found keys are kept for the page.
+  await load(CODE, fetcher, now + 3 * KEY_LOOK_AGAIN_MS);
+  assert.equal(asked.filter((u) => u.startsWith(KEY_API)).length, 2);
 });
 
 test("old journeys (format 2) still open: no key on the server, or a key with nothing behind it", async () => {

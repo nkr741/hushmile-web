@@ -98,11 +98,6 @@ export async function topicFor(code, kind, link = null) {
   return "h" + hex(await hmac(seed, "topic:" + kind)).slice(0, 32);
 }
 
-/** Where the server keeps this journey's sealed link key (lib/seal.dart linkKeyId). */
-export async function linkKeyId(code) {
-  return hex(await hmac(await masterFor(bareCode(code)), "linkkey-id")).slice(0, 32);
-}
-
 function fromB64url(text) {
   const clean = String(text).trim().replace(/-/g, "+").replace(/_/g, "/");
   const padded = clean + "===".slice((clean.length + 3) % 4);
@@ -150,30 +145,163 @@ export function readInput(raw) {
 }
 
 export const KEY_API = `${PRIMARY_RELAY}/v1/key`;
+
+// ---- Link-key escrow v2 (lib/linkkey.dart, docs/LINK_KEY.md) ---------------
+// Only for a journey followed with just the spoken code. The server keeps the
+// link key wrapped with scrypt(code, a salt for this journey); the id is
+// scrypt(code, a fixed salt). Never a usable key: opening it needs the code.
+export const ESCROW_N = 16384;
+export const ESCROW_R = 8;
+export const ESCROW_P = 1;
+export const ESCROW_ID_SALT = "hushmile/escrow-id/v2";
+export const KEY_LOOK_AGAIN_MS = 4 * 60000; // the server allows 1 lookup per 3 min after a burst
+export const SEEN_EVERY_MS = 5 * 60000;
+let escrowCost = ESCROW_N;
+/** Tests: a cheaper scrypt (the real cost is pinned by the vector test). */
+export function setEscrowCost(n) { escrowCost = n; escrowIds.clear(); }
+
+async function pbkdf2once(password, salt, length) {
+  const base = await subtle.importKey("raw", password, "PBKDF2", false, ["deriveBits"]);
+  return new Uint8Array(await subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 1 }, base, length * 8));
+}
+
+function salsa8(s) {
+  const x = Uint32Array.from(s);
+  const R = (a, b) => (a << b) | (a >>> (32 - b));
+  for (let i = 0; i < 8; i += 2) {
+    x[4] ^= R(x[0] + x[12], 7); x[8] ^= R(x[4] + x[0], 9); x[12] ^= R(x[8] + x[4], 13); x[0] ^= R(x[12] + x[8], 18);
+    x[9] ^= R(x[5] + x[1], 7); x[13] ^= R(x[9] + x[5], 9); x[1] ^= R(x[13] + x[9], 13); x[5] ^= R(x[1] + x[13], 18);
+    x[14] ^= R(x[10] + x[6], 7); x[2] ^= R(x[14] + x[10], 9); x[6] ^= R(x[2] + x[14], 13); x[10] ^= R(x[6] + x[2], 18);
+    x[3] ^= R(x[15] + x[11], 7); x[7] ^= R(x[3] + x[15], 9); x[11] ^= R(x[7] + x[3], 13); x[15] ^= R(x[11] + x[7], 18);
+    x[1] ^= R(x[0] + x[3], 7); x[2] ^= R(x[1] + x[0], 9); x[3] ^= R(x[2] + x[1], 13); x[0] ^= R(x[3] + x[2], 18);
+    x[6] ^= R(x[5] + x[4], 7); x[7] ^= R(x[6] + x[5], 9); x[4] ^= R(x[7] + x[6], 13); x[5] ^= R(x[4] + x[7], 18);
+    x[11] ^= R(x[10] + x[9], 7); x[8] ^= R(x[11] + x[10], 9); x[9] ^= R(x[8] + x[11], 13); x[10] ^= R(x[9] + x[8], 18);
+    x[12] ^= R(x[15] + x[14], 7); x[13] ^= R(x[12] + x[15], 9); x[14] ^= R(x[13] + x[12], 13); x[15] ^= R(x[14] + x[13], 18);
+  }
+  for (let i = 0; i < 16; i++) s[i] = (s[i] + x[i]) >>> 0;
+}
+
+function blockMix(b, y, t, r) {
+  t.set(b.subarray((2 * r - 1) * 16, 2 * r * 16));
+  for (let i = 0; i < 2 * r; i++) {
+    for (let w = 0; w < 16; w++) t[w] ^= b[i * 16 + w];
+    salsa8(t);
+    y.set(t, (i >> 1) * 16 + (i & 1) * r * 16);
+  }
+  b.set(y);
+}
+
+/** scrypt (RFC 7914); the same as lib/scrypt.dart. */
+export async function scrypt(password, salt, n = ESCROW_N, r = ESCROW_R, p = ESCROW_P, length = 32) {
+  const words = 32 * r;
+  const b = await pbkdf2once(password, salt, p * 128 * r);
+  const view = new DataView(b.buffer);
+  const v = new Uint32Array(n * words);
+  const x = new Uint32Array(words);
+  const y = new Uint32Array(words);
+  const t = new Uint32Array(16);
+  for (let i = 0; i < p; i++) {
+    for (let w = 0; w < words; w++) x[w] = view.getUint32((i * words + w) * 4, true);
+    for (let k = 0; k < n; k++) { v.set(x, k * words); blockMix(x, y, t, r); }
+    for (let k = 0; k < n; k++) {
+      const base = (x[(2 * r - 1) * 16] & (n - 1)) * words;
+      for (let w = 0; w < words; w++) x[w] ^= v[base + w];
+      blockMix(x, y, t, r);
+    }
+    for (let w = 0; w < words; w++) view.setUint32((i * words + w) * 4, x[w], true);
+  }
+  return pbkdf2once(password, b, length);
+}
+
+const escrowIds = new Map();
+
+/** Where the server keeps this journey's wrapped link key (lib/linkkey.dart escrowId). */
+export function escrowId(code) {
+  const bare = bareCode(code);
+  if (!escrowIds.has(bare)) escrowIds.set(bare, scrypt(enc.encode(bare), enc.encode(ESCROW_ID_SALT), escrowCost).then((out) => hex(out.slice(0, 16))));
+  return escrowIds.get(bare);
+}
+
+async function wrapKeyFor(code, salt) {
+  const raw = await scrypt(enc.encode(bareCode(code)), salt, escrowCost);
+  return subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+/** The box the traveller's phone stores (tests; the viewer only opens boxes). */
+export async function wrapLinkKey(code, key) {
+  const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  const nonce = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const box = new Uint8Array(await subtle.encrypt({ name: "AES-GCM", iv: nonce, additionalData: enc.encode(`hushmile-escrow-v2:${await escrowId(code)}`) }, await wrapKeyFor(code, salt), enc.encode(linkKeyText(key))));
+  const out = new Uint8Array(12 + box.length);
+  out.set(nonce);
+  out.set(box, 12);
+  return { salt: toB64url(salt), box: toB64url(out) };
+}
+
+/** The link key from a server box, or null when it does not open with this code. */
+export async function unwrapLinkKey(code, got) {
+  try {
+    const salt = fromB64url(got.salt);
+    const all = fromB64url(got.box);
+    if (salt.length !== 16 || all.length < 29) return null;
+    const clear = await subtle.decrypt({ name: "AES-GCM", iv: all.slice(0, 12), additionalData: enc.encode(`hushmile-escrow-v2:${await escrowId(code)}`) }, await wrapKeyFor(code, salt), all.slice(12));
+    return linkKeyFromText(dec.decode(clear));
+  } catch {
+    return null;
+  }
+}
+
 const keyLookups = new Map();
 
 /** Family with only the code: the journey's link key from Hushmile's server,
- * or null (an older journey without one, or no answer). Asked once a page. */
-export function lookUpLinkKey(code, fetcher = globalThis.fetch) {
+ * or null: no box yet (an older journey, or the traveller's phone has not seen
+ * this page yet; asked again after KEY_LOOK_AGAIN_MS), or no answer (asked
+ * again on the next refresh). A found key is kept for the page. */
+export function lookUpLinkKey(code, fetcher = globalThis.fetch, now = Date.now()) {
   const bare = bareCode(code);
-  if (!keyLookups.has(bare)) {
-    keyLookups.set(bare, (async () => {
-      try {
-        const res = await fetcher(`${KEY_API}?id=${await linkKeyId(code)}`);
-        if (!res.ok) {
-          if (res.status !== 404) keyLookups.delete(bare); // busy: ask again next minute
-          return null;
-        }
-        const body = await res.json();
-        const text = typeof body.box === "string" ? await openFor(code, "linkkey", body.box) : null;
-        return text ? linkKeyFromText(text) : null;
-      } catch {
-        keyLookups.delete(bare);
+  const had = keyLookups.get(bare);
+  if (had && (had.found || now - had.at < KEY_LOOK_AGAIN_MS)) return had.promise;
+  const entry = { at: now, found: false, promise: null };
+  entry.promise = (async () => {
+    try {
+      const res = await fetcher(`${KEY_API}?id=${await escrowId(code)}`);
+      if (!res.ok) {
+        if (res.status !== 404) keyLookups.delete(bare); // busy: ask again next minute
         return null;
       }
-    })());
+      const body = await res.json();
+      const key = typeof body.box === "string" && typeof body.salt === "string" ? await unwrapLinkKey(code, body) : null;
+      entry.found = Boolean(key);
+      return key;
+    } catch {
+      keyLookups.delete(bare);
+      return null;
+    }
+  })();
+  keyLookups.set(bare, entry);
+  return entry.promise;
+}
+
+const seenSent = new Map();
+
+/** A code-only page says "someone is watching" on the old channel (as an old
+ * app does), at most every SEEN_EVERY_MS: the traveller's phone then writes
+ * the old channel too and escrows the link key for this page. */
+export async function noteSeen(code, fetcher = globalThis.fetch, now = Date.now(), relays = RELAYS) {
+  const bare = bareCode(code);
+  if (now - (seenSent.get(bare) || 0) < SEEN_EVERY_MS) return false;
+  seenSent.set(bare, now);
+  const body = await sealFor(code, "seen", JSON.stringify({ seen: true, at: now }));
+  const topic = await topicFor(code, "seen");
+  for (const relay of relays) {
+    try {
+      // text/plain, no custom header: no CORS preflight. firebase=no as the app sends.
+      const res = await fetcher(`${relay}/${topic}?firebase=no`, { method: "POST", body });
+      if (res.ok) return true;
+    } catch {}
   }
-  return keyLookups.get(bare);
+  seenSent.delete(bare);
+  return false;
 }
 
 export async function sealFor(code, kind, plain, link = null) {
@@ -670,11 +798,14 @@ export function mapAgeLine(at, now = Date.now()) {
 
 /** link: the key from the page's link; undefined means "ask the server". */
 export async function load(code, fetcher = globalThis.fetch, now = Date.now(), link = undefined) {
-  const key = link === undefined ? await lookUpLinkKey(code, fetcher) : link;
+  const key = link === undefined ? await lookUpLinkKey(code, fetcher, now) : link;
   const [tripBody, spot, dead] = await Promise.all([latest(code, "trip", "12h", fetcher, RELAYS, key), latest(code, "spot", "3h", fetcher, RELAYS, key), latest(code, "dead", "3h", fetcher, RELAYS, key).catch(() => null)]);
   const trip = readTrip(tripBody);
   if (!trip && !spot) return null;
   const closedTrip = Boolean(tripBody && tripBody.revoked);
+  // Code only (no link key): tell the traveller's phone, so it writes the
+  // old channel and escrows the key for this page.
+  if (!key && !closedTrip) await noteSeen(code, fetcher, now).catch(() => false);
   let state = viewState({ trip, spot, dead, now, closedTrip });
   // Only a quiet phone needs the weak-signal hint, so only then ask for it.
   if (trip && state.title === "Signal gap") {
