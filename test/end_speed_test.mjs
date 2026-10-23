@@ -39,3 +39,24 @@ test("speed carries its age and the moving average; older phones show none", () 
   assert.match(speedLine({ kmh: 62, kmhAt: now - 120000 }, now), /వేగం/);
   setLanguage("en");
 });
+
+test("road facts and Google traffic as the late reason (app 1.4.0); older phones show none", () => {
+  setLanguage("en");
+  const now = Date.UTC(2026, 9, 23, 8, 0);
+  const late = { ...trip, start: now - 4 * 3600000 };
+  const spot = { km: 3, updatedAt: now - 60000, movedAt: now - 60000, road: "NH 65", toward: "Vijayawada", via: "NH 65", why: "traffic", whyPlace: "Suryapet", lateMin: 40 };
+  const state = viewState({ trip: late, spot, now });
+  assert.deepEqual(state.roads.slice(0, 2), ["On NH 65 towards Vijayawada", "Via NH 65"]);
+  assert.match(state.sentence, /Heavy traffic near Suryapet/);
+  assert.deepEqual(viewState({ trip, spot: { km: 3, updatedAt: now - 60000 }, now }).roads, []);
+  const ride = viewState({ trip: late, spot: { km: 0, updatedAt: now - 60000, movedAt: now - 60000, board: "longwait", offKm: 3 }, now });
+  assert.ok(ride.roads.includes("Taking a different route than planned"));
+  assert.ok(ride.roads.some((l) => l.startsWith("Long wait at the boarding point (239 min)")));
+});
+
+test("a stay in the destination area without a tap is not 'Arrived'", () => {
+  setLanguage("en");
+  const end = endSentence({ revoked: true, end: "detected", endAt: 5 }, trip, "Naveen", trip.to);
+  assert.equal(end.arrived, false);
+  assert.match(end.sentence, /did not tap/);
+});

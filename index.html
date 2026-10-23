@@ -22,6 +22,7 @@
     .band { color: var(--tone); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: 14px; }
     .sentence { font-size: 22px; font-weight: 700; margin: 8px 0 12px; line-height: 1.35; overflow-wrap: anywhere; }
     .facts { display:flex; flex-wrap:wrap; gap: 8px 18px; font-weight: 600; }
+    .roads { margin-top: 10px; font-size: 1.05rem; line-height: 1.4; } .roads div + div { margin-top: 4px; }
     form { display:flex; gap:8px; margin-top: 12px; }
     input { flex:1; min-width:0; width:100%; font-size: 20px; letter-spacing: 2px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--fg); min-height: 52px; }
     button { flex:none; font-size: 17px; font-weight: 700; padding: 0 18px; border-radius: 14px; border: 0; background: var(--blue); color: #fff; min-height: 52px; min-width: 52px; cursor: pointer; }
@@ -35,6 +36,7 @@
       <div class="band" id="band">Journey</div>
       <div class="sentence" id="sentence">Enter the Journey Code you were sent.</div>
       <div class="facts"><span id="last"></span><span id="left"></span><span id="speed"></span><span id="battery"></span></div>
+      <div id="roads" class="roads" hidden></div>
     </section>
     <form id="form" autocomplete="off">
       <label for="code" id="code-label" class="visually-hidden" style="position:absolute;left:-9999px">Journey Code</label>

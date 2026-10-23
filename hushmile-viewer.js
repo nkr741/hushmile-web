@@ -316,14 +316,35 @@ export function deadAlertApplies(dead, spot) {
 const CHECKIN = { ok: "ciOk", traffic: "ciTraffic", food: "ciFood", fuel: "ciFuel", break: "ciBreak", safe: "ciSafe", vehicle: "ciVehicle" };
 const checkinLabel = (said) => (CHECKIN[said] ? t[CHECKIN[said]]() : said);
 
-export function delayReason({ stillMin, stopsMin, paceKmh, plannedKmh, driverSaid }) {
+export function delayReason({ stillMin, stopsMin, paceKmh, plannedKmh, driverSaid, why = null, whyPlace = "", offKm = 0, stopPlace = "" }) {
   if (driverSaid === "traffic") return t.rsTraffic();
   if (driverSaid === "food" || driverSaid === "break") return t.rsBreak();
   if (driverSaid === "fuel") return t.rsFuel();
-  if (stillMin >= 10) return t.rsStopped({ n: stillMin });
+  // Traffic measured by Google on the traveller's phone (app 1.4.0), with the slow place.
+  if (why === "traffic") return whyPlace ? t.rsTrafficNear({ place: whyPlace }) : t.rsTrafficRoute();
+  if (stillMin >= 10) return stopPlace ? t.rsStoppedNear({ n: stillMin, place: stopPlace }) : t.rsStopped({ n: stillMin });
   if (paceKmh != null && plannedKmh > 0 && paceKmh < plannedKmh * 0.8) return t.rsSlow({ pace: paceKmh, plan: Math.round(plannedKmh) });
+  if (offKm > 2 || why === "offroute") return t.rsOffRoute();
   if (stopsMin >= 10) return t.rsStops({ n: stopsMin });
   return null;
+}
+
+/** Road facts from app 1.4.0, each as of the last update: the road, the
+ * route, a different route, a passenger's boarding state. Empty for older phones. */
+export function roadLines(spot, trip = null) {
+  if (!spot) return [];
+  const lines = [];
+  const text = (k) => (typeof spot[k] === "string" ? spot[k].trim() : "");
+  if (text("road")) lines.push(text("toward") ? t.roadOnTowards({ road: text("road"), place: text("toward") }) : t.roadOn({ road: text("road") }));
+  if (spot.inArea === true) lines.push(t.endDetected());
+  if (typeof spot.offKm === "number" && spot.offKm > 2) lines.push(t.offRouteNow());
+  if (text("via")) lines.push(t.routeVia({ road: text("via") }));
+  const board = text("board");
+  if (board === "longwait") lines.push(t.psLongWait({ n: typeof spot.updatedAt === "number" && trip && trip.start ? Math.max(0, Math.floor((spot.updatedAt - trip.start) / 60000)) : 0 }));
+  else if (board === "waiting") lines.push(t.psWaitingNow());
+  else if (board === "onboard") lines.push(t.psOnBoard());
+  else if (board === "onboardstopped") lines.push(t.psOnBoardStopped());
+  return lines;
 }
 
 export function deadPhoneLine({ lastAt, place, battery, kmLeft }) {
@@ -360,7 +381,7 @@ function atDestination(trip, lat, lng, accuracyM) {
 export function endSentence(spot, trip, name, to) {
   const at = typeof spot.endAt === "number" ? spot.endAt : typeof spot.at === "number" ? spot.at : null;
   const place = typeof spot.endPlace === "string" && spot.endPlace ? spot.endPlace : typeof spot.place === "string" && spot.place ? spot.place : null;
-  let reason = ["arrived", "ended", "expired"].includes(spot.end) ? spot.end : null;
+  let reason = ["arrived", "ended", "expired", "detected"].includes(spot.end) ? spot.end : null;
   let saidArrived = spot.endSaid === "arrived";
   let away = typeof spot.endAwayKm === "number" ? spot.endAwayKm : null;
   if (!reason) {
@@ -375,6 +396,7 @@ export function endSentence(spot, trip, name, to) {
   }
   if (reason === "arrived") return { arrived: true, sentence: t.jsArrived({ name }) };
   if (reason === "expired") return { arrived: false, sentence: t.jsExpired() };
+  if (reason === "detected") return { arrived: false, sentence: at == null ? t.endDetected() : t.endDetectedLine({ name, to, time: clock(at) }) };
   if (at == null) return { arrived: false, sentence: spot.revoked ? t.webEnded() : t.jsEndedEarly() };
   if (saidArrived && away != null) return { arrived: false, sentence: t.endedSaidArrived({ name, time: clock(at), km: away < 10 ? away.toFixed(1) : String(Math.round(away)), to }) };
   if (place) return { arrived: false, sentence: t.endedNearAt({ name, place, time: clock(at) }) };
@@ -413,7 +435,8 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   const low = battery != null && !charging && battery < 10 ? ` ${t.jsBatteryLow({ n: battery })}` : "";
   const closed = spot.revoked || spot.interrupt === "closed";
   const speedText = closed ? null : speedLine(spot, now);
-  const out = (title, tone, sentence, live = false) => ({ title, tone, sentence: live ? sentence + low : sentence, lastUpdate: at, kmLeft, battery, charging, speed: speedText });
+  const roads = closed ? [] : roadLines(spot, trip);
+  const out = (title, tone, sentence, live = false) => ({ title, tone, sentence: live ? sentence + low : sentence, lastUpdate: at, kmLeft, battery, charging, speed: speedText, roads });
   if (closed) {
     const end = endSentence(spot, trip, name, to);
     return end.arrived ? out("Arrived safely", "calm", end.sentence) : out("Tracking stopped", "quiet", end.sentence);
@@ -447,7 +470,7 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   const late = arrivesAt ? Math.round((now + moveMin * 60000 - arrivesAt) / 60000) : 0;
   const minutes = moveMin >= 1 ? Math.round(moveMin) : null;
   if (late > 8) {
-    const why = delayReason({ stillMin, stopsMin: Number(spot.stopsMin) || 0, paceKmh: typeof spot.paceKmh === "number" ? Math.round(spot.paceKmh) : null, plannedKmh: speed, driverSaid: said }) || (said ? `${checkinLabel(said)}.` : t.jsNoReason());
+    const why = delayReason({ stillMin, stopsMin: Number(spot.stopsMin) || 0, paceKmh: typeof spot.paceKmh === "number" ? Math.round(spot.paceKmh) : null, plannedKmh: speed, driverSaid: said, why: typeof spot.why === "string" ? spot.why : null, whyPlace: typeof spot.whyPlace === "string" ? spot.whyPlace : "", offKm: typeof spot.offKm === "number" ? spot.offKm : 0, stopPlace: place || "" }) || (said ? `${checkinLabel(said)}.` : t.jsNoReason());
     if (late > 25) return out("At risk", "checkin", `${lead}${t.jsRiskReason({ past: t.jsRiskPast({ n: late }), reason: why, where: place || clock(at) })}`, true);
     return out("Delayed", "calm", `${lead}${t.jsLate({ late, why, rest: minutes ? t.jsMinRest({ m: minutes }) : "" })}`, true);
   }
