@@ -1,7 +1,7 @@
 // node --test test/
 import assert from "node:assert/strict";
 import test from "node:test";
-import { endSentence, setLanguage, speedLine, viewState } from "../hushmile-viewer.js";
+import { delayReason, endSentence, roadLines, setLanguage, speedLine, viewState } from "../hushmile-viewer.js";
 
 const points = [[17.41, 78.37], [17.415, 78.41]];
 const trip = { name: "Naveen", from: "Lanco Hills Rd", to: "Lakshmi Nagar Colony", start: 0, totalKm: 10.5, speedKmh: 30, points };
@@ -59,4 +59,11 @@ test("a stay in the destination area without a tap is not 'Arrived'", () => {
   const end = endSentence({ revoked: true, end: "detected", endAt: 5 }, trip, "Naveen", trip.to);
   assert.equal(end.arrived, false);
   assert.match(end.sentence, /did not tap/);
+});
+
+test("stop context lines; a toll plaza wait is not given as the delay", () => {
+  setLanguage("en");
+  assert.deepEqual(roadLines({ stopKind: "fuel", stopName: "HP" }), ["Stopped at a fuel station: HP"]);
+  assert.equal(delayReason({ stillMin: 14, stopsMin: 0, paceKmh: null, plannedKmh: 60, stopKind: "toll" }), null);
+  assert.match(delayReason({ stillMin: 14, stopsMin: 0, paceKmh: null, plannedKmh: 60, stopKind: "fuel" }), /^Stopped for 14/);
 });

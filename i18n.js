@@ -120,6 +120,10 @@ export const STRINGS = {
     callWaitDriving: (a = {}) => `Driving now. Better to wait for the next stop than to call.`,
     endDetected: (a = {}) => `Reached the destination area (not confirmed)`,
     endDetectedLine: (a = {}) => `${a.name} reached the area of ${a.to} at ${a.time}, but did not tap "I've arrived". The journey closed by itself.`,
+    stopFuel: (a = {}) => `Stopped at a fuel station`,
+    stopFood: (a = {}) => `Stopped at a food place`,
+    stopToll: (a = {}) => `At a toll plaza (not a delay)`,
+    stopNamed: (a = {}) => `${a.what}: ${a.name}`,
   },
   te: {
     privacy: (a = {}) => `గోప్యత`,
@@ -241,6 +245,10 @@ export const STRINGS = {
     callWaitDriving: (a = {}) => `ఇప్పుడు నడుపుతున్నారు. ఫోన్ చేయడం కంటే తర్వాతి ఆగే చోటు వరకు ఆగడం మంచిది.`,
     endDetected: (a = {}) => `గమ్యస్థానం ప్రాంతానికి చేరారు (నిర్ధారించలేదు)`,
     endDetectedLine: (a = {}) => `${a.name} ${a.time}కి ${a.to} ప్రాంతానికి చేరారు, కానీ "చేరుకున్నాను" నొక్కలేదు. ప్రయాణం దానంతట అదే ముగిసింది.`,
+    stopFuel: (a = {}) => `పెట్రోల్ బంక్ దగ్గర ఆగారు`,
+    stopFood: (a = {}) => `భోజనం/టీ చోట ఆగారు`,
+    stopToll: (a = {}) => `టోల్ ప్లాజా దగ్గర (ఆలస్యం కాదు)`,
+    stopNamed: (a = {}) => `${a.what}: ${a.name}`,
   },
   hi: {
     privacy: (a = {}) => `निजता`,
@@ -362,5 +370,9 @@ export const STRINGS = {
     callWaitDriving: (a = {}) => `अभी गाड़ी चला रहे हैं। फ़ोन करने से अच्छा है अगले ठहराव तक रुकें।`,
     endDetected: (a = {}) => `मंज़िल के इलाक़े में पहुँचे (पुष्टि नहीं हुई)`,
     endDetectedLine: (a = {}) => `${a.name} ${a.time} पर ${a.to} के इलाक़े में पहुँचे, पर "मैं पहुँच गया" नहीं दबाया। सफ़र अपने-आप बंद हुआ।`,
+    stopFuel: (a = {}) => `पेट्रोल पंप पर रुके हैं`,
+    stopFood: (a = {}) => `खाने की जगह पर रुके हैं`,
+    stopToll: (a = {}) => `टोल प्लाज़ा पर (देरी नहीं)`,
+    stopNamed: (a = {}) => `${a.what}: ${a.name}`,
   },
 };
