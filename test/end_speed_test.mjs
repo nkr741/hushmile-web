@@ -10,7 +10,7 @@ test("an arrival far from the destination is shown as an end, with the distance"
   setLanguage("en");
   const end = endSentence({ revoked: true, end: "ended", endSaid: "arrived", endAwayKm: 7.0, endAt: Date.UTC(2026, 9, 23, 6, 1) }, trip, "Naveen", trip.to);
   assert.equal(end.arrived, false);
-  assert.match(end.sentence, /tapped I've arrived at .*, but the last location was 7\.0 km from Lakshmi Nagar Colony/);
+  assert.match(end.sentence, /tapped I've arrived at .*, about 7\.0 km from Lakshmi Nagar Colony/);
   // A 1.3.5 phone sent only arrived:true; its last point was 7 km away.
   const legacy = endSentence({ revoked: true, arrived: true, lat: 17.412, lng: 78.345, at: 1 }, trip, "Naveen", trip.to);
   assert.equal(legacy.arrived, false);
@@ -58,7 +58,7 @@ test("a stay in the destination area without a tap is not 'Arrived'", () => {
   setLanguage("en");
   const end = endSentence({ revoked: true, end: "detected", endAt: 5 }, trip, "Naveen", trip.to);
   assert.equal(end.arrived, false);
-  assert.match(end.sentence, /did not tap/);
+  assert.match(end.sentence, /ended by itself/);
 });
 
 test("stop context lines; a toll plaza wait is not given as the delay", () => {

@@ -4,10 +4,13 @@ A static page that shows a Hushmile road trip to family without the app.
 
 Open `https://nkr741.github.io/hushmile-web/#ABCD-EFGH.KEY` (app 1.4.1+:
 the Journey Code and the journey's link key) or the older
-`https://nkr741.github.io/hushmile-web/#ABCD-EFGH` (the code only; the page
-then asks api.hushmile.com for the link key, which is sealed with the code and
-rate-limited there; journeys from older apps have none and are read as
-before). The fragment is never sent to the web server. The page polls
+`https://nkr741.github.io/hushmile-web/#ABCD-EFGH` (the code only). A
+code-only page posts an encrypted "seen" on the old channel, so the
+traveller's phone writes the old channel for it and escrows the link key on
+api.hushmile.com, wrapped with scrypt(code, per-journey salt) and never
+readable by the server; the page asks for it every 4 minutes (the server
+rate-limits lookups) and then reads the new channel. Journeys from older apps
+have no key and are read as before. See docs/LINK_KEY.md in the app repo. The fragment is never sent to the web server. The page polls
 Hushmile's relay (api.hushmile.com) and ntfy.sh once a minute, keeps the newest, decrypts in the browser (PBKDF2-HMAC-SHA256 150,000
 rounds, AES-256-GCM, the same scheme as the app) and shows the status
 sentence, last update and kilometres left.
