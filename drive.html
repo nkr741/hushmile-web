@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>Open in Hushmile</title>
+</head>
+<body>
+  <p>Opening Hushmile…</p>
+  <script>
+    var hash = (location.hash || "").replace(/^#/, "");
+    var parts = hash.split(".");
+    if (parts.length === 3 && /^[0-9a-fA-F]{32}$/.test(parts[0]) && /^[0-9a-fA-F]{32}$/.test(parts[1])) {
+      location.replace("hushmile://drive?id=" + encodeURIComponent(parts[0]) + "&s=" + encodeURIComponent(parts[1]) + "&c=" + encodeURIComponent(parts[2]));
+    }
+  </script>
+  <p>If Hushmile did not open, install the app and ask the office to send the driver link again. This page cannot start a trip.</p>
+</body>
+</html>
