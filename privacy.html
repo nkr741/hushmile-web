@@ -22,10 +22,10 @@
 <body>
 <main>
   <header><a href="./"><img class="mark" src="./img/logo-64.png" width="40" height="40" alt="Hushmile home"></a><h1>Hushmile privacy policy</h1></header>
-  <p>Last updated 23 October 2026. Applies to the Hushmile Android app (app.hushmile.journey) and the web viewer at nkr741.github.io/hushmile-web.</p>
+  <p>Last updated 24 October 2026. Applies to the Hushmile Android app (app.hushmile.journey) and the web viewer at nkr741.github.io/hushmile-web. This is the privacy policy linked from Google Play.</p>
 
   <h2>In short</h2>
-  <p>Hushmile lets a driver share one road trip with family. There is no account. Since app version 1.3.0 Hushmile runs its own small server (api.hushmile.com) that relays encrypted updates and passes place search and traffic times to Google; it cannot read journey updates. Journey updates are encrypted on the driver's phone with a key made from the Journey Code and (from app 1.4.1) a random link key that travels only in the shared link, and only someone with that code can read them. We (the developer) cannot read them.</p>
+  <p>Hushmile lets someone share one road trip with the people they choose. A family journey needs no account. From app version 1.4.4 a travel company can create a desk account. Since app version 1.3.0 Hushmile runs its own small server (api.hushmile.com) that relays encrypted updates and passes place search and traffic times to Google. It cannot read journey updates. Those updates are encrypted on the traveller's phone with a key made from the Journey Code and (from app 1.4.1) a random link key that travels only in the shared link. Only someone with that code can read them. We cannot read them. We do not sell personal data.</p>
 
   <h2>What the app uses</h2>
   <ul>
@@ -35,6 +35,19 @@
     <li>The family phone sends only "seen" and "please check in" signals, also encrypted.</li>
   </ul>
   <p>We do not use advertising, analytics, crash reporting, contacts or photos, and no phone number except the optional SOS number described above. On Android the app registers with Google Firebase Cloud Messaging when it starts. This gives the app a random installation ID and a push token that Google uses only to deliver wake-ups. They are not linked to your name or Journey Code, and uninstalling the app removes them from the phone.</p>
+
+  <h2>Travel desk</h2>
+  <p>Drivers and families still do not sign in. A travel company that wants a booking list does. Creating that account sends us the company name, an email address and a password. We store the password only as a PBKDF2-HMAC-SHA256 hash with a random salt and 210,000 iterations. We never keep the password itself. The sign-in token is stored only as a SHA-256 hash and expires after 30 days.</p>
+  <p>A booking stores the vehicle number, the from and to text the company typed, the time they should start, and the status (not started, on trip, or arrived) with those times. It does not store the Journey Code, the route, or any location. The code is created on the company's phone and sent by them to the driver. After the driver taps Start, the journey is the same encrypted journey as a family trip. Bookings are deleted 30 days after they were created. Deleting the company account in the app removes the company, the sign-in and the bookings immediately. It does not end a journey that has already started. That still ends when the traveller arrives, ends it, or the code expires.</p>
+
+  <h2>Security</h2>
+  <ul>
+    <li>The app allows only HTTPS. Journey updates use AES-256-GCM. The server carries the sealed message and cannot open it.</li>
+    <li>The Journey Code is not a field on the travel-desk API. A request that includes one is rejected.</li>
+    <li>Company passwords and session tokens are stored only as one-way hashes. Sign-up and sign-in are rate limited.</li>
+    <li>Deleting a company account requires the password again, so a saved session alone cannot wipe it.</li>
+    <li>We have not commissioned an independent security audit. These are the controls the software actually uses.</li>
+  </ul>
 
   <h2>Who can see a journey</h2>
   <p>Anyone the driver gives the Journey Code to. They see the exact position on a map, its latitude and longitude, the nearest place name, battery level and whether it is charging, stops, time and distance left, and the last update time. Share the code only with people you trust.</p>
@@ -57,10 +70,14 @@
   <p>The pages the app and Play open are the static pages at nkr741.github.io/hushmile-web, hosted on GitHub Pages. The name hushmile.com is not that site yet, so it is not the privacy policy. The website uses no cookies, analytics, trackers or third-party fonts. The Journey Code stays in the link after the <code>#</code>, which browsers do not send to the web server. The page decrypts updates in your browser and only connects to the Hushmile relay and ntfy.sh, and loads OpenStreetMap map tiles for the area of the route (OpenStreetMap sees your internet address and this site's name, never the code or the route itself). GitHub may log basic request data (such as IP address) under its own policy.</p>
 
   <h2>Keeping and deleting data</h2>
-  <p>Journey details on the phone are kept only for the current journey and the last arrival screen. Ending a journey sends a "closed" notice so the code stops opening it, and relay copies expire after about 19 hours (12 hours on ntfy.sh). Uninstalling the app or clearing its storage deletes everything on the phone. Because there is no account and the server keeps only encrypted messages that expire, plus anonymous weak-signal counts, there is normally nothing linked to you. To ask us to delete data, email the address under Contact. We will confirm this, or delete anything we find, within 30 days.</p>
+  <p>Journey details on the phone are kept only for the current journey and the last arrival screen. Ending a journey sends a "closed" notice so the code stops opening it, and relay copies expire after about 19 hours (12 hours on ntfy.sh). Uninstalling the app or clearing its storage deletes everything on that phone, including a saved company sign-in.</p>
+  <p>A family journey is not linked to a name or email on our server. What the server keeps for it is encrypted messages that expire, a locked link key that expires, and anonymous weak-signal counts that are not tied to a person. A company account is linked to an email. Its bookings last 30 days, or until the company deletes the account in Travel desk. To ask us to delete anything else, email the address under Contact. We reply within 30 days, confirm what we hold, and delete what we find that is linked to you.</p>
 
   <h2>Children</h2>
-  <p>Hushmile is meant for adults aged 18 and over.</p>
+  <p>Hushmile is meant for adults aged 18 and over. We do not knowingly collect information from children.</p>
+
+  <h2>Who operates this</h2>
+  <p>The app and the server at api.hushmile.com are operated for Hushmile from India. The relay runs in Bangalore. Questions, access requests and deletion requests go to the contact below. This notice describes the data the software actually handles. It is the notice for the app, the web viewer and the travel desk.</p>
 
   <h2>Not an emergency service</h2>
   <p>Hushmile does not contact emergency services and never calls anyone by itself. SOS (hold the button for 3 seconds, then a 5 second countdown you can cancel) alerts the people following the journey through the same encrypted updates; it only works when the phone has signal, and nobody may see it in time. The app offers 112 in the phone's dialler; you press call. In an emergency call 112 (India) or your local number.</p>
