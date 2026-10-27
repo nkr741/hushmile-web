@@ -4,21 +4,99 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
   <title>Open in Hushmile</title>
+  <style>
+    :root { --bg:#fff; --fg:#16181d; --muted:#4f5663; --blue:#2d69fc; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#061018; --fg:#f7f9fc; --muted:#b7c3d4; } }
+    body { margin:0; background:var(--bg); color:var(--fg); font: 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+    p { color: var(--muted); }
+    button, a.btn { display:block; width:100%; box-sizing:border-box; margin:12px 0; padding:14px; border-radius:12px; border:0; font-size:17px; text-align:center; text-decoration:none; background:var(--blue); color:#fff; }
+    [hidden] { display:none !important; }
+    button.plain { background:transparent; color:var(--blue); border:1px solid var(--blue); }
+  </style>
 </head>
 <body>
-  <p>Opening Hushmile…</p>
-  <script>
-    var hash = (location.hash || "").replace(/^#/, "");
-    var parts = hash.split(".");
-    var idOk = parts.length >= 2 && /^[0-9a-fA-F]{32}$/.test(parts[0]) && /^[0-9a-fA-F]{32}$/.test(parts[1]);
-    if (idOk && parts.length === 2) {
-      location.replace("hushmile://drive?id=" + encodeURIComponent(parts[0]) + "&s=" + encodeURIComponent(parts[1]));
-    } else if (idOk && parts.length === 3) {
-      location.replace("hushmile://drive?id=" + encodeURIComponent(parts[0]) + "&s=" + encodeURIComponent(parts[1]) + "&c=" + encodeURIComponent(parts[2]));
+<main>
+  <h1 id="title">Open in Hushmile</h1>
+  <p id="lead">Opening Hushmile…</p>
+  <a class="btn" id="open" href="#" hidden>Open Hushmile</a>
+  <button class="plain" id="copy" type="button" hidden>Copy driver link</button>
+  <p id="help" hidden>If Hushmile did not open, copy the link, open Hushmile, open the menu, tap Open a booking and paste it.</p>
+  <p id="bad" hidden>This link is not complete. Ask the office to send the driver link again.</p>
+  <p id="note">This page cannot start a trip. You still need the 4-digit number from the office.</p>
+</main>
+<script>
+(function () {
+  // Driver link: #<booking id>.<driver secret>[.<seal key> | .<old Journey Code>].
+  // Everything after # stays in this browser; it is never sent to a server.
+  var T = {
+    en: {
+      title: "Open in Hushmile", lead: "Opening Hushmile…", open: "Open Hushmile", copy: "Copy driver link", copied: "Link copied",
+      help: "If Hushmile did not open, copy the link, open Hushmile, open the menu, tap Open a booking and paste it.",
+      bad: "This link is not complete. Ask the office to send the driver link again.",
+      note: "This page cannot start a trip. You still need the 4-digit number from the office."
+    },
+    hi: {
+      title: "Hushmile में खोलें", lead: "Hushmile खुल रहा है…", open: "Hushmile खोलें", copy: "ड्राइवर लिंक कॉपी करें", copied: "लिंक कॉपी हो गया",
+      help: "अगर Hushmile नहीं खुला, तो लिंक कॉपी करें, Hushmile खोलें, मेनू में ‘बुकिंग खोलें’ पर टैप करें और लिंक चिपकाएँ।",
+      bad: "यह लिंक अधूरा है। ऑफ़िस से ड्राइवर लिंक दोबारा भेजने को कहें।",
+      note: "इस पेज से ट्रिप शुरू नहीं होती। ऑफ़िस से मिला 4 अंकों का नंबर भी चाहिए।"
+    },
+    te: {
+      title: "Hushmileలో తెరవండి", lead: "Hushmile తెరుచుకుంటోంది…", open: "Hushmile తెరవండి", copy: "డ్రైవర్ లింక్ కాపీ చేయండి", copied: "లింక్ కాపీ అయింది",
+      help: "Hushmile తెరుచుకోకపోతే, లింక్ కాపీ చేసి, Hushmile తెరిచి, మెనూలో ‘బుకింగ్ తెరవండి’ నొక్కి లింక్ అతికించండి.",
+      bad: "ఈ లింక్ పూర్తిగా లేదు. డ్రైవర్ లింక్ మళ్లీ పంపమని ఆఫీసును అడగండి.",
+      note: "ఈ పేజీ నుండి ట్రిప్ మొదలవదు. ఆఫీసు ఇచ్చిన 4 అంకెల నంబర్ కూడా కావాలి."
     }
-  </script>
-  <p>If Hushmile did not open, install the app and ask the office to send the driver link again. This page cannot start a trip.</p>
+  };
+  var langs = (navigator.languages || [navigator.language || "en"]).map(function (l) { return String(l).slice(0, 2).toLowerCase(); });
+  var forced = (location.search.match(/[?&]lang=(en|hi|te)\b/) || [])[1];
+  var lang = forced || langs.filter(function (l) { return T[l]; })[0] || "en";
+  var t = T[lang];
+  document.documentElement.lang = lang;
+  ["title", "lead", "open", "copy", "help", "bad", "note"].forEach(function (k) { document.getElementById(k).textContent = t[k]; });
+  document.title = t.title;
+
+  var hex = /^[0-9a-fA-F]{32}$/;
+  var codeRe = /^[23456789A-HJ-NP-Z]{4}-[23456789A-HJ-NP-Z]{4}$/i;
+  var parts = (location.hash || "").replace(/^#/, "").split(".");
+  var ok = parts.length >= 2 && parts.length <= 3 && hex.test(parts[0]) && hex.test(parts[1]);
+  var q = ok ? "id=" + parts[0].toLowerCase() + "&s=" + parts[1].toLowerCase() : "";
+  if (ok && parts.length === 3) {
+    if (hex.test(parts[2])) q += "&k=" + parts[2].toLowerCase();
+    else if (codeRe.test(parts[2])) q += "&c=" + encodeURIComponent(parts[2].toUpperCase());
+    else ok = false;
+  }
+  var show = function (id) { document.getElementById(id).hidden = false; };
+  if (!ok) {
+    document.getElementById("lead").hidden = true;
+    show("bad");
+    return;
+  }
+  // An Android intent addressed to the Hushmile package: no other app that
+  // registered hushmile:// can receive the driver secret.
+  var android = /Android/i.test(navigator.userAgent);
+  var target = android
+    ? "intent://drive?" + q + "#Intent;scheme=hushmile;package=app.hushmile.journey;end"
+    : "hushmile://drive?" + q;
+  var openBtn = document.getElementById("open");
+  openBtn.href = target;
+  show("open");
+  show("copy");
+  show("help");
+  document.getElementById("copy").addEventListener("click", function () {
+    var btn = this;
+    var done = function () { btn.textContent = t.copied; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(location.href).then(done, function () { window.prompt(t.copy, location.href); });
+    } else {
+      window.prompt(t.copy, location.href);
+    }
+  });
+  if (android) location.replace(target);
+})();
+</script>
 </body>
 </html>
