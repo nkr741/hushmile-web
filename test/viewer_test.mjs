@@ -153,7 +153,8 @@ test("every web string exists in Telugu and Hindi, translated", () => {
 test("language follows the browser unless one was chosen", () => {
   assert.equal(pickLanguage(null, ["te-IN", "en-US"]), "te");
   assert.equal(pickLanguage(null, ["hi"]), "hi");
-  assert.equal(pickLanguage(null, ["fr-FR", "kn-IN"]), "en");
+  assert.equal(pickLanguage(null, ["fr-FR", "kn-IN"]), "kn", "Kannada is an app language since 1.7.1");
+  assert.equal(pickLanguage(null, ["fr-FR", "ml-IN"]), "en");
   assert.equal(pickLanguage("hi", ["te-IN"]), "hi");
   assert.equal(pickLanguage("xx", ["en-GB"]), "en");
 });

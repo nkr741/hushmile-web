@@ -710,6 +710,8 @@ export const STRINGS = {
     webMapQueryHospital: (a = {}) => `மருத்துவமனை`,
     webMapQueryPolice: (a = {}) => `காவல் நிலையம்`,
     webNotFromPhone: (a = {}) => `சில அப்டேட்கள் ${a.name}-ஓட போன்ல இருந்து வரலை, அதனால காட்டப்படலை.`,
+    mapLegendPlanned: (a = {}) => `திட்டமிட்ட ரூட்`,
+    mapLegendDriven: (a = {}) => `இதுவரை போன ரோடு`,
   },
   kn: {
     privacy: (a = {}) => `ಪ್ರೈವಸಿ`,
@@ -886,5 +888,7 @@ export const STRINGS = {
     webMapQueryHospital: (a = {}) => `ಆಸ್ಪತ್ರೆ`,
     webMapQueryPolice: (a = {}) => `ಪೊಲೀಸ್ ಠಾಣೆ`,
     webNotFromPhone: (a = {}) => `ಕೆಲವು ಅಪ್‌ಡೇಟ್‌ಗಳು ${a.name} ಅವರ ಫೋನ್‌ನಿಂದ ಬಂದಿಲ್ಲ, ಹಾಗಾಗಿ ತೋರಿಸಿಲ್ಲ.`,
+    mapLegendPlanned: (a = {}) => `ಯೋಜಿಸಿದ ರೂಟ್`,
+    mapLegendDriven: (a = {}) => `ಇಲ್ಲಿವರೆಗೆ ಹೋದ ರಸ್ತೆ`,
   },
 };
