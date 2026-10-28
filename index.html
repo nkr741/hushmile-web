@@ -39,6 +39,7 @@
     .help h2 { margin: 0 0 8px; font-size: 1.1rem; } .help .links { display: flex; flex-wrap: wrap; gap: 8px; }
     .help a { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--line); color: var(--fg); text-decoration: none; }
     .help .small { color: var(--muted); font-size: .9rem; margin-top: 6px; }
+    #not-from-phone { color: var(--muted); font-size: .9rem; margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -50,6 +51,7 @@
       <div class="sentence" id="sentence">Enter the Journey Code you were sent.</div>
       <div class="facts"><span id="last"></span><span id="left"></span><span id="speed"></span><span id="battery"></span></div>
       <div id="roads" class="roads" hidden></div>
+      <div id="not-from-phone" class="small" hidden></div>
     </section>
     <section id="help" class="help" hidden><h2 id="help-title"></h2><div id="help-links" class="links"></div><div id="help-search" class="links" style="margin-top:8px"></div><div id="help-note" class="small"></div></section>
     <section id="map-box" class="map-box" hidden><div id="map"></div><div id="map-note" class="map-note"></div></section>
@@ -61,6 +63,8 @@
     <p class="note"><span id="note-text">Read-only. The code stays in this page's address after the #, which is not sent to the web server. Updates are decrypted in this browser. Updates every minute. Hushmile is not an emergency service. </span><a id="privacy" href="./privacy.html">Privacy</a></p>
   </main>
   <script src="./vendor/leaflet.js"></script>
+  <!-- Ed25519 check for browsers without it in WebCrypto (TweetNaCl, public domain). -->
+  <script src="./vendor/nacl.min.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

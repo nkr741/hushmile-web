@@ -47,6 +47,8 @@ function show(state) {
   const roads = $("roads");
   roads.replaceChildren(...(state.roads || []).map((line) => Object.assign(document.createElement("div"), { textContent: line })));
   roads.hidden = !(state.roads || []).length;
+  $("not-from-phone").textContent = state.notFromPhone || "";
+  $("not-from-phone").hidden = !state.notFromPhone;
   paintSos(state.sos || null);
   paintHelp(state.help || null);
   $("battery").textContent = state.battery != null ? (state.charging ? t.batteryCharging({ n: state.battery }) : t.batteryPct({ n: state.battery })) : "";

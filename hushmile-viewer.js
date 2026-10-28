@@ -327,6 +327,103 @@ export async function openFor(code, kind, sealed, link = null) {
   }
 }
 
+// ---- Journey write key (app 1.6.9, the app's docs/WRITE_KEY.md) ------------
+// The traveller's phone signs every point, route, dead-phone alert and end
+// with a key that never leaves it; the link key commits to its public half
+// (k = SHA-256("hushmile/link-pub/v1" | pub)[0:16]). This page holds the link
+// (code + link key), so it can seal a message, but not sign one. A message
+// signed by the proven key is kept; once a journey's key is proven, an
+// unsigned or wrongly signed one is dropped. Journeys from 1.6.8 and older
+// carry no signature and read as before. "seen" is never signed.
+const WRITE_KEY_CONTEXT = "hushmile/link-pub/v1";
+const MESSAGE_SIG_CONTEXT = "hushmile-sig-v1";
+const SIGNED_TAIL = /,?"_pk":"([A-Za-z0-9_-]{43})","_sg":"([A-Za-z0-9_-]{86})"\}$/;
+const SIG_PLACEHOLDER = "A".repeat(86);
+const trustedPubs = new Map(); // bare code -> proven public key (base64url)
+const notFromPhone = new Map(); // bare code -> Set of dropped messages
+const sigChecks = new Map(); // kind + text -> check, bounded
+
+export async function linkKeyForPub(pub) {
+  const all = new Uint8Array(enc.encode(WRITE_KEY_CONTEXT).length + pub.length);
+  all.set(enc.encode(WRITE_KEY_CONTEXT));
+  all.set(pub, all.length - pub.length);
+  return new Uint8Array(await subtle.digest("SHA-256", all)).slice(0, 16);
+}
+
+export async function pubMatchesLink(pubText, link) {
+  if (!link) return false;
+  let pub;
+  try { pub = fromB64url(pubText); } catch { return false; }
+  if (pub.length !== 32) return false;
+  const k = await linkKeyForPub(pub);
+  let diff = 0;
+  for (let i = 0; i < 16; i++) diff |= k[i] ^ link[i];
+  return link.length === 16 && diff === 0;
+}
+
+/** Ed25519 verify: the browser's own WebCrypto when it has Ed25519, else the
+ * bundled TweetNaCl (vendor/nacl.min.js). null when neither is available. */
+export async function verifyEd25519(pub, sig, msg) {
+  try {
+    const key = await subtle.importKey("raw", pub, { name: "Ed25519" }, false, ["verify"]);
+    return await subtle.verify({ name: "Ed25519" }, key, sig, msg);
+  } catch {}
+  const nacl = globalThis.nacl;
+  if (nacl && nacl.sign && nacl.sign.detached) return nacl.sign.detached.verify(msg, sig, pub);
+  return null;
+}
+
+/** {state: "unsigned"|"valid"|"broken"|"unknown", pub, clean}. */
+export async function checkSigned(kind, plain) {
+  const cacheKey = `${kind}\n${plain}`;
+  if (sigChecks.has(cacheKey)) return sigChecks.get(cacheKey);
+  const result = await checkSignedOnce(kind, plain);
+  if (sigChecks.size >= 600) sigChecks.delete(sigChecks.keys().next().value);
+  sigChecks.set(cacheKey, result);
+  return result;
+}
+
+async function checkSignedOnce(kind, plain) {
+  if (!plain.includes('"_sg"') && !plain.includes('"_pk"')) return { state: "unsigned" };
+  const tail = SIGNED_TAIL.exec(plain);
+  if (!tail) return { state: "broken" };
+  let body;
+  try { body = JSON.parse(plain); } catch { return { state: "broken" }; }
+  if (!body || typeof body !== "object" || body._pk !== tail[1] || body._sg !== tail[2]) return { state: "broken" };
+  let pub, sig;
+  try { pub = fromB64url(tail[1]); sig = fromB64url(tail[2]); } catch { return { state: "broken" }; }
+  if (pub.length !== 32 || sig.length !== 64) return { state: "broken" };
+  const base = `${plain.slice(0, plain.length - 88)}${SIG_PLACEHOLDER}"}`;
+  const ok = await verifyEd25519(pub, sig, enc.encode(`${MESSAGE_SIG_CONTEXT}\n${kind}\n${base}`));
+  if (ok === false) return { state: "broken" };
+  delete body._pk;
+  delete body._sg;
+  return { state: ok ? "valid" : "unknown", pub: tail[1], clean: body };
+}
+
+function dropped(code, kind, plain) {
+  const bare = bareCode(code);
+  if (!notFromPhone.has(bare)) notFromPhone.set(bare, new Set());
+  const seen = notFromPhone.get(bare);
+  if (seen.size < 600) seen.add(`${kind}\n${plain}`);
+}
+
+/** Updates dropped for this journey because they did not come from the traveller's phone. */
+export function notFromPhoneCount(code) {
+  return notFromPhone.get(bareCode(code))?.size || 0;
+}
+
+export function trustedPubFor(code) {
+  return trustedPubs.get(bareCode(code)) || null;
+}
+
+/** Tests: forget proven keys and dropped updates. */
+export function resetTrust() {
+  trustedPubs.clear();
+  notFromPhone.clear();
+  sigChecks.clear();
+}
+
 /** Newest readable message on a channel across all relays, parsed, or null.
  * Throws only when no relay answered. */
 export async function latest(code, kind, since = "3h", fetcher = globalThis.fetch, relays = RELAYS, link = null) {
@@ -372,15 +469,27 @@ export function resetReads() {
   resting.clear();
 }
 
+const newer = (a, b) => a && (!b || a.at[0] > b.at[0] || (a.at[0] === b.at[0] && a.at[1] > b.at[1]));
+
 async function latestOn(code, kind, since, fetcher, relays, link) {
   const topic = await topicFor(code, kind, link);
   const awake = relays.filter((relay) => !relayResting(relay));
   const answers = await Promise.allSettled((awake.length ? awake : relays).map((relay) => readRelay(relay, topic, code, kind, since, fetcher, link)));
   const ok = answers.filter((a) => a.status === "fulfilled").map((a) => a.value);
   if (!ok.length) throw answers[0].reason || new Error("relay");
+  // Decide after every relay answered: one may hold the proof the other lacks.
+  const trusted = link ? trustedPubs.get(bareCode(code)) : null;
   let best = null;
   for (const found of ok) {
-    if (found && (!best || found.at[0] > best.at[0] || (found.at[0] === best.at[0] && found.at[1] > best.at[1]))) best = found;
+    if (!found) continue;
+    if (trusted) {
+      if (found.byPub.has(trusted) && newer(found.byPub.get(trusted), best)) best = found.byPub.get(trusted);
+      if (found.unsigned) dropped(code, kind, found.unsigned.plain);
+    } else {
+      // No proven key: as before (a journey from an older app, or no link key).
+      if (newer(found.unsigned, best)) best = found.unsigned;
+      if (!link) for (const item of found.byPub.values()) if (newer(item, best)) best = item;
+    }
   }
   return best ? best.body : null;
 }
@@ -397,10 +506,13 @@ async function readRelay(relay, topic, code, kind, since, fetcher, link) {
   if (!res.ok) throw new Error(`relay ${res.status}`);
   resting.delete(relay);
   const text = await res.text();
-  let best = kept ? kept.best : null;
+  // The newest unsigned message, and the newest per signing key.
+  let unsigned = kept ? kept.unsigned : null;
+  const byPub = new Map(kept ? kept.byPub : []);
   let order = kept ? kept.order : 0;
   let lastId = null;
   let allIds = true;
+  const bare = bareCode(code);
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     let event;
@@ -412,12 +524,25 @@ async function readRelay(relay, topic, code, kind, since, fetcher, link) {
     if (plain == null) continue;
     let body;
     try { body = JSON.parse(plain); } catch { continue; }
+    const check = kind === "seen" ? { state: "unsigned" } : await checkSigned(kind, plain);
+    if (check.state === "broken") { dropped(code, kind, plain); continue; }
+    if (check.state === "valid") {
+      body = check.clean;
+      if (link && !trustedPubs.has(bare) && await pubMatchesLink(check.pub, link)) trustedPubs.set(bare, check.pub);
+      if (link && !(await pubMatchesLink(check.pub, link))) { dropped(code, kind, plain); continue; }
+    } else if (check.state === "unknown") {
+      // This browser cannot check a signature (no Ed25519 at all): as before.
+      body = check.clean;
+    }
     const at = [event.time || 0, order++];
     if (body && typeof body === "object" && typeof event.time === "number") body.relayAt = event.time * 1000;
-    if (!best || at[0] > best.at[0] || (at[0] === best.at[0] && at[1] > best.at[1])) best = { at, body };
+    const item = { at, body, plain };
+    if (check.state === "valid") {
+      if (newer(item, byPub.get(check.pub))) byPub.set(check.pub, item);
+    } else if (newer(item, unsigned)) unsigned = item;
   }
-  if (kind !== "dead" && allIds && (lastId || kept)) reads.set(key, { lastId: lastId || kept.lastId, best, order });
-  return best;
+  if (kind !== "dead" && allIds && (lastId || kept)) reads.set(key, { lastId: lastId || kept.lastId, unsigned, byPub, order });
+  return { unsigned, byPub };
 }
 
 // ---- Route -----------------------------------------------------------------
@@ -943,5 +1068,8 @@ export async function load(code, fetcher = globalThis.fetch, now = Date.now(), l
     if (Object.keys(weak).length) state = viewState({ trip, spot, dead, now, closedTrip, weak });
   }
   state.map = mapData(trip, spot);
+  // Something sealed with this journey's link but not signed by the
+  // traveller's phone was dropped: say so, quietly.
+  if (notFromPhoneCount(code) > 0) state.notFromPhone = t.webNotFromPhone({ name: (trip && trip.name) || "" });
   return state;
 }
