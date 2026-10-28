@@ -79,6 +79,6 @@ test("a check-in reply shows as a status with its age (app 1.4.1 quick replies)"
   assert.equal(repliedLine({ checkin: "break" }, now), null);
   assert.deepEqual(roadLines({ checkin: "break", repliedAt: now - 60000 }, null, now), ["Taking a break, replied 1 min ago"]);
   setLanguage("hi");
-  assert.equal(repliedLine({ checkin: "break", repliedAt: now - 3 * 60000 }, now), "थोड़ा रुके हैं, जवाब 3 मिनट पहले");
+  assert.equal(repliedLine({ checkin: "break", repliedAt: now - 3 * 60000 }, now), "थोड़ा ब्रेक ले रहे हैं, जवाब 3 मिनट पहले");
   setLanguage("en");
 });
