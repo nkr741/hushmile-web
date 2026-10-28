@@ -1,9 +1,10 @@
 import { createMap } from "./map-view.js";
 import { mapConfig } from "./map-config.js";
 import { bareCode, clock, language, LANGUAGES, linkKeyText, load, mapAgeLine, pickLanguage, readInput, setLanguage, t } from "./hushmile-viewer.js";
+import { LANGUAGE_INFO } from "./i18n.js";
 
 const bands = { calm: "toneCalm", checkin: "toneCheckin", help: "toneHelp", quiet: "toneQuiet" };
-const NAMES = { en: "English", te: "తెలుగు", hi: "हिन्दी" };
+const NAMES = Object.fromEntries(LANGUAGES.map((code) => [code, LANGUAGE_INFO[code].label]));
 const $ = (id) => document.getElementById(id);
 let timer = null;
 let current = null;

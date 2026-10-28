@@ -149,7 +149,7 @@ test("landmark and rain lines, in each language", () => {
   assert.equal(landmarkLine({}), null);
   assert.match(rainLine({ rain: { at: now - 5 * 60000, mm: 6 } }, now), /checked 5 min ago/);
   assert.equal(rainLine({ rain: { at: now - 3 * 3600000 } }, now), null, "an old reading is not shown");
-  for (const lang of ["te", "hi"]) {
+  for (const lang of ["te", "hi", "ta", "kn"]) {
     setLanguage(lang);
     assert.ok(!/About|past/.test(landmarkLine({ lm: "Narkatpalli", lmKm: 8, lmRel: "past" })), lang);
   }
