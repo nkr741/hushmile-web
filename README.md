@@ -33,3 +33,27 @@ Tests: `node --test test/`
 `safety-config.js` is generated in the app repo from `config/safety.json`
 (SOS timing, emergency numbers by country, night hours, battery bands) by
 `python3 tool/safety_to_code.py`; copy it here with the other viewer files.
+
+## Map
+
+`map-view.js` draws the journey map; its settings are in `map-config.js`.
+MapLibre GL JS 6.16.0 (vendored in `vendor/`, BSD-3-Clause,
+`vendor/LICENSE-maplibre.txt`) with OpenFreeMap vector tiles: the Positron
+style by day and Dark at night. OpenFreeMap is free, needs no key, has no
+limit on map views and allows commercial use; its attribution is shown on the
+map. The library (about 1.6 MB, cached by the browser) is loaded only when
+there is a map to show. Labels are the Latin (English) names: MapLibre cannot
+yet join Telugu or Hindi letters, so labels in those scripts would look
+broken. A browser without WebGL gets the older Leaflet 1.9.4 map with
+OpenStreetMap tiles (`referrerPolicy: strict-origin`, as OSM's tile policy
+asks).
+
+On the map: blue line = the planned route; green line and dots = the road
+taken so far (the trail the phone sent); round marker = the last known place
+(arrow: its heading; halo: how sure the phone was), with its age under the
+map. A button under the zoom buttons fits the whole route again.
+
+Why not the Google Maps JavaScript API here: it is billed per map load after
+10,000 free loads a month (Dynamic Maps, USD 7 per 1,000 after that), and
+every family member opening a link is a load. OpenFreeMap costs nothing at
+any volume.

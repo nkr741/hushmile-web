@@ -176,6 +176,8 @@ export const STRINGS = {
     webMapQueryHospital: (a = {}) => `hospital`,
     webMapQueryPolice: (a = {}) => `police station`,
     webNotFromPhone: (a = {}) => `Some updates did not come from ${a.name}'s phone, so they are not shown.`,
+    mapLegendPlanned: (a = {}) => `Planned route`,
+    mapLegendDriven: (a = {}) => `Road taken so far`,
   },
   te: {
     privacy: (a = {}) => `ప్రైవసీ`,
@@ -352,6 +354,8 @@ export const STRINGS = {
     webMapQueryHospital: (a = {}) => `ఆసుపత్రి`,
     webMapQueryPolice: (a = {}) => `పోలీస్ స్టేషన్`,
     webNotFromPhone: (a = {}) => `కొన్ని అప్‌డేట్‌లు ${a.name} ఫోన్ నుంచి రాలేదు, అందుకే వాటిని చూపడం లేదు.`,
+    mapLegendPlanned: (a = {}) => `అనుకున్న దారి`,
+    mapLegendDriven: (a = {}) => `ఇప్పటిదాకా వెళ్ళిన దారి`,
   },
   hi: {
     privacy: (a = {}) => `प्राइवेसी`,
@@ -528,6 +532,8 @@ export const STRINGS = {
     webMapQueryHospital: (a = {}) => `अस्पताल`,
     webMapQueryPolice: (a = {}) => `पुलिस स्टेशन`,
     webNotFromPhone: (a = {}) => `कुछ अपडेट ${a.name} के फ़ोन से नहीं आए, इसलिए उन्हें नहीं दिखाया गया।`,
+    mapLegendPlanned: (a = {}) => `तय रास्ता`,
+    mapLegendDriven: (a = {}) => `अब तक का रास्ता`,
   },
   ta: {
     privacy: (a = {}) => `பிரைவசி`,
@@ -704,6 +710,8 @@ export const STRINGS = {
     webMapQueryHospital: (a = {}) => `மருத்துவமனை`,
     webMapQueryPolice: (a = {}) => `காவல் நிலையம்`,
     webNotFromPhone: (a = {}) => `சில அப்டேட்கள் ${a.name}-ஓட போன்ல இருந்து வரலை, அதனால காட்டப்படலை.`,
+    mapLegendPlanned: (a = {}) => `திட்டமிட்ட ரூட்`,
+    mapLegendDriven: (a = {}) => `இதுவரை போன ரோடு`,
   },
   kn: {
     privacy: (a = {}) => `ಪ್ರೈವಸಿ`,
@@ -880,5 +888,7 @@ export const STRINGS = {
     webMapQueryHospital: (a = {}) => `ಆಸ್ಪತ್ರೆ`,
     webMapQueryPolice: (a = {}) => `ಪೊಲೀಸ್ ಠಾಣೆ`,
     webNotFromPhone: (a = {}) => `ಕೆಲವು ಅಪ್‌ಡೇಟ್‌ಗಳು ${a.name} ಅವರ ಫೋನ್‌ನಿಂದ ಬಂದಿಲ್ಲ, ಹಾಗಾಗಿ ತೋರಿಸಿಲ್ಲ.`,
+    mapLegendPlanned: (a = {}) => `ಯೋಜಿಸಿದ ರೂಟ್`,
+    mapLegendDriven: (a = {}) => `ಇಲ್ಲಿವರೆಗೆ ಹೋದ ರಸ್ತೆ`,
   },
 };
