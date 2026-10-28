@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.hushmile.com https://ntfy.sh; img-src 'self' data: https://tile.openstreetmap.org; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.hushmile.com https://ntfy.sh https://tiles.openfreemap.org; img-src 'self' data: blob: https://tile.openstreetmap.org https://tiles.openfreemap.org; worker-src 'self'; base-uri 'none'; form-action 'none'">
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./vendor/leaflet.css">
   <title>Hushmile · How is the journey going?</title>
@@ -28,8 +28,14 @@
     input { flex:1; min-width:0; width:100%; font-size: 20px; letter-spacing: 2px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--fg); min-height: 52px; }
     button { flex:none; font-size: 17px; font-weight: 700; padding: 0 18px; border-radius: 14px; border: 0; background: var(--blue); color: #fff; min-height: 52px; min-width: 52px; cursor: pointer; }
     .note { color: var(--muted); font-size: 15px; margin-top: 18px; }
-    .map-box { margin-top: 14px; } #map { height: 280px; border-radius: 18px; border: 1px solid var(--line); overflow: hidden; }
-    .map-note { color: var(--muted); font-size: 14px; margin-top: 6px; }
+    .map-box { margin-top: 16px; } #map { height: min(56vh, 360px); min-height: 240px; border-radius: 20px; border: 1px solid var(--line); overflow: hidden; background: var(--card); }
+    .map-note { color: var(--muted); font-size: 14px; margin-top: 4px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; color: var(--muted); font-size: 14px; }
+    .legend span { display: inline-flex; align-items: center; gap: 8px; } .legend i { width: 18px; height: 4px; border-radius: 2px; display: inline-block; }
+    .hm-start { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 5px solid #1b7f4e; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+    .hm-vehicle { width: 34px; height: 34px; border-radius: 50%; background: #0e7c66; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); display: grid; place-items: center; }
+    .hm-vehicle.stale { background: #5f6673; } .hm-vehicle.no-heading .hm-arrow { display: none; } .hm-vehicle.no-heading::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: #fff; }
+    .maplibregl-ctrl-group button { width: 40px; height: 40px; } .maplibregl-ctrl-group .hm-fit { color: #2d69fc; display: grid; place-items: center; }
     .leaflet-tooltip { font: 600 14px/1.3 system-ui, sans-serif; }
     .sos { border-radius: 20px; padding: 16px; margin-bottom: 12px; background: #b42318; color: #fff; }
     .sos h2 { margin: 0 0 6px; font-size: 1.3rem; } .sos p { margin: 4px 0; line-height: 1.4; }
@@ -54,7 +60,7 @@
       <div id="not-from-phone" class="small" hidden></div>
     </section>
     <section id="help" class="help" hidden><h2 id="help-title"></h2><div id="help-links" class="links"></div><div id="help-search" class="links" style="margin-top:8px"></div><div id="help-note" class="small"></div></section>
-    <section id="map-box" class="map-box" hidden><div id="map"></div><div id="map-note" class="map-note"></div></section>
+    <section id="map-box" class="map-box" hidden><div id="map" role="img" aria-label="Map"></div><div class="legend"><span id="legend-planned"><i style="background:#2d69fc"></i><span id="legend-planned-text"></span></span><span id="legend-driven" hidden><i style="background:#0e7c66"></i><span id="legend-driven-text"></span></span></div><div id="map-note" class="map-note"></div></section>
     <form id="form" autocomplete="off">
       <label for="code" id="code-label" class="visually-hidden" style="position:absolute;left:-9999px">Journey Code</label>
       <input id="code" name="code" placeholder="ABCD-EFGH" inputmode="text" autocapitalize="characters" maxlength="200">

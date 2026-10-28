@@ -1,3 +1,5 @@
+import { createMap } from "./map-view.js";
+import { mapConfig } from "./map-config.js";
 import { bareCode, clock, language, LANGUAGES, linkKeyText, load, mapAgeLine, pickLanguage, readInput, setLanguage, t } from "./hushmile-viewer.js";
 
 const bands = { calm: "toneCalm", checkin: "toneCheckin", help: "toneHelp", quiet: "toneQuiet" };
@@ -25,6 +27,8 @@ function paintPage() {
   $("note-text").textContent = `${t.webNote()} `;
   $("privacy").textContent = t.privacy();
   $("lang-label").textContent = t.language();
+  $("legend-planned-text").textContent = t.mapLegendPlanned();
+  $("legend-driven-text").textContent = t.mapLegendDriven();
   const select = $("lang");
   select.replaceChildren();
   for (const code of ["system", ...LANGUAGES]) {
@@ -78,56 +82,88 @@ function paintHelp(help) {
   $("help-note").textContent = t.dialNote();
 }
 
-// ---- Map (Leaflet + OpenStreetMap tiles, both loaded from this site / OSM) --
-// Blue line: the planned route. Grey dots: earlier places (the trail the
-// phone sent). The marker: the last known place, with how long ago.
-let map = null;
-let layers = null;
-let fitted = false;
+// ---- Map (map-view.js: MapLibre + OpenFreeMap; Leaflet + OSM without WebGL)
+// Blue line: the planned route. Green: the road taken so far (the trail the
+// phone sent), with dots. The marker: the last known place, its heading and
+// how sure the phone was (the halo).
+let mapView = null;
+let mapStarting = null;
 
-function drawMap(data) {
-  const box = $("map-box");
+/** The older raster map, kept for browsers without WebGL. */
+function leafletMap(el) {
   const L = globalThis.L;
-  if (!data || !L) {
+  if (!L) return null;
+  const map = L.map(el, { zoomControl: true, attributionControl: true });
+  L.tileLayer(mapConfig.rasterTiles, {
+    maxZoom: 19,
+    // OSM's tile policy asks for a Referer; send only the site, never a path.
+    referrerPolicy: "strict-origin",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(map);
+  map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
+  const layers = L.layerGroup().addTo(map);
+  let fitted = false;
+  let bounds = [];
+  const fit = () => {
+    if (bounds.length === 1) map.setView(bounds[0], 13);
+    else if (bounds.length) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
+  };
+  const c = mapConfig.colors;
+  return {
+    engine: "leaflet",
+    fit,
+    reset: () => (fitted = false),
+    draw(data, label) {
+      layers.clearLayers();
+      bounds = [];
+      if (data.route.length > 1) {
+        L.polyline(data.route, { color: "#fff", weight: 8, opacity: 0.9 }).addTo(layers);
+        L.polyline(data.route, { color: c.route, weight: 5, opacity: 0.8 }).addTo(layers);
+        bounds.push(...data.route);
+      }
+      const driven = [...data.trail.map(([lat, lng]) => [lat, lng]), ...(data.last ? [[data.last.lat, data.last.lng]] : [])];
+      if (driven.length > 1) L.polyline(driven, { color: c.driven, weight: 4, opacity: 0.95 }).addTo(layers);
+      for (const [lat, lng] of data.trail) {
+        L.circleMarker([lat, lng], { radius: 4, color: "#fff", fillColor: c.driven, fillOpacity: 0.85, weight: 1.5 }).addTo(layers);
+      }
+      if (data.last) {
+        const stale = data.last.at != null && Date.now() - data.last.at > 15 * 60000;
+        if (data.last.acc) L.circle([data.last.lat, data.last.lng], { radius: data.last.acc, color: stale ? c.stale : c.driven, weight: 1, fillOpacity: 0.14 }).addTo(layers);
+        L.circleMarker([data.last.lat, data.last.lng], { radius: 9, color: "#fff", weight: 3, fillColor: stale ? c.stale : c.driven, fillOpacity: 1 })
+          .bindTooltip(label, { permanent: true, direction: "top", offset: [0, -10] })
+          .addTo(layers);
+        bounds.push([data.last.lat, data.last.lng]);
+      }
+      if (!fitted && bounds.length) {
+        // Fit once; after that keep the family's own zoom and pan.
+        fit();
+        fitted = true;
+      }
+      map.invalidateSize();
+    },
+  };
+}
+
+async function drawMap(data) {
+  const box = $("map-box");
+  if (!data) {
     box.hidden = true;
     return;
   }
   box.hidden = false;
-  if (!map) {
-    map = L.map("map", { zoomControl: true, attributionControl: true });
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      // OSM's tile policy asks for a Referer; send only the site, never a path.
-      referrerPolicy: "strict-origin",
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
-    map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
-    layers = L.layerGroup().addTo(map);
+  if (!mapView) {
+    mapStarting ??= createMap($("map"), { leaflet: leafletMap });
+    mapView = await mapStarting;
+    if (!mapView) {
+      box.hidden = true;
+      return;
+    }
   }
-  layers.clearLayers();
-  const bounds = [];
-  if (data.route.length > 1) {
-    L.polyline(data.route, { color: "#2d69fc", weight: 4, opacity: 0.55 }).addTo(layers);
-    bounds.push(...data.route);
-  }
-  for (const [lat, lng] of data.trail) {
-    L.circleMarker([lat, lng], { radius: 4, color: "#5f6673", fillColor: "#5f6673", fillOpacity: 0.8, weight: 1 }).addTo(layers);
-  }
-  if (data.last) {
-    const stale = data.last.at != null && Date.now() - data.last.at > 15 * 60000;
-    L.circleMarker([data.last.lat, data.last.lng], { radius: 9, color: "#fff", weight: 3, fillColor: stale ? "#5f6673" : "#2d69fc", fillOpacity: 1 })
-      .bindTooltip(mapAgeLine(data.last.at), { permanent: true, direction: "top", offset: [0, -10] })
-      .addTo(layers);
-    bounds.push([data.last.lat, data.last.lng]);
-  }
-  $("map-note").textContent = [data.route.length > 1 ? t.mapPlanned() : "", data.trail.length ? t.mapTrail() : ""].filter(Boolean).join(" ");
-  if (!fitted && bounds.length) {
-    // Fit once; after that keep the family's own zoom and pan.
-    if (bounds.length === 1) map.setView(bounds[0], 13);
-    else map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
-    fitted = true;
-  }
-  map.invalidateSize();
+  const label = data.last ? mapAgeLine(data.last.at) : "";
+  mapView.draw(data, label);
+  $("legend-planned").hidden = data.route.length < 2;
+  $("legend-driven").hidden = data.trail.length === 0;
+  $("map-note").textContent = label;
 }
 
 async function refresh(code) {
@@ -148,8 +184,7 @@ function start(input) {
   const { code: shown, key } = readInput(input);
   if (bareCode(shown).length !== 8) return;
   if (shown !== current) {
-    fitted = false;
-    if (layers) layers.clearLayers();
+    mapView?.reset();
   }
   current = shown;
   currentKey = key;

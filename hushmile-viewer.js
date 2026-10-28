@@ -1043,6 +1043,9 @@ export function mapData(trip, spot) {
     }
   }
   const last = spot && ok(spot.lat, spot.lng) && !spot.revoked ? { lat: spot.lat, lng: spot.lng, at } : null;
+  // Heading (degrees) for the arrow and accuracy (metres) for the halo, when sent.
+  if (last && typeof spot.hdg === "number" && Number.isFinite(spot.hdg)) last.hdg = spot.hdg;
+  if (last && typeof spot.acc === "number" && spot.acc > 0 && spot.acc < 5000) last.acc = spot.acc;
   if (!route.length && !trail.length && !last) return null;
   return { route, trail, last };
 }
