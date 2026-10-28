@@ -3,13 +3,14 @@
 // from the URL fragment (#ABCD-EFGH or #ABCD-EFGH.KEY), which browsers never
 // send to the web server. Same steps as lib/seal.dart.
 
-import { STRINGS } from "./i18n.js";
+import { LANGUAGE_INFO, STRINGS } from "./i18n.js";
 import { SAFETY } from "./safety-config.js";
 
 // ---- Language (same words as the app: lib/l10n/*.arb) ----------------------
 
 let lang = "en";
-export const LANGUAGES = ["en", "te", "hi"];
+/** From the app's language table (lib/lang.dart), through tool/arb_to_js.py. */
+export const LANGUAGES = Object.keys(LANGUAGE_INFO);
 export function setLanguage(code) {
   lang = LANGUAGES.includes(code) ? code : "en";
   return lang;
@@ -665,12 +666,13 @@ export function weakNear(cells, { lat, lng, points, km: atKm, aheadKm = 12 } = {
 
 // ---- The sentence (a port of lib/assurance.dart, family side) ---------------
 
-/** Same as clockFor in lib/lang.dart: Telugu AM/PM, English and Hindi am/pm. */
+/** Same as clockFor in lib/lang.dart: AM/PM where the table says so (Telugu,
+ * Tamil, Kannada), am/pm otherwise. */
 export function clock(ms) {
   const d = new Date(ms);
   const h = d.getHours() % 12 === 0 ? 12 : d.getHours() % 12;
   const pm = d.getHours() >= 12;
-  const mark = lang === "te" ? (pm ? "PM" : "AM") : pm ? "pm" : "am";
+  const mark = LANGUAGE_INFO[lang]?.upperAmPm ? (pm ? "PM" : "AM") : pm ? "pm" : "am";
   return `${h}:${String(d.getMinutes()).padStart(2, "0")} ${mark}`;
 }
 
