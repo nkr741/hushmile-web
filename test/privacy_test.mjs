@@ -30,3 +30,8 @@ test("the data table and desk fields are listed", () => {
     assert.match(block, /200/, lang);
   }
 });
+
+test("the travel desk is not offered for school buses", () => {
+  assert.doesNotMatch(page, /school bus/i);
+  assert.match(page, /aged 18 and over/);
+});
