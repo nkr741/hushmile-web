@@ -53,7 +53,8 @@ test("battery bands and the quiet explanation at night", () => {
   const at = local(23, 0);
   const state = viewState({ trip, spot: { km: 50, updatedAt: at, battery: 9, every: 120 }, now: at + 13 * min });
   assert.equal(state.title, "Signal gap");
-  assert.match(state.sentence, /battery was low/);
+  assert.match(state.sentence, /battery was 9%, so the phone may have switched off/);
+  assert.doesNotMatch(state.sentence, /battery was low/, "the low battery is said once");
   assert.match(state.sentence, /At night Hushmile tells you sooner/);
 });
 

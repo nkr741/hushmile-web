@@ -995,7 +995,9 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
     const deadSays = deadAlertApplies(dead, spot);
     if (now - at >= nightQuiet(noUpdateAfter(Number(spot.every) || 0), at) || deadSays) {
       // Silence after a low battery is explained as such; night alerts come sooner.
-      const why = [batteryBand(spot) ? ` ${t.quietLowBattery()}` : "", nightAt(at) ? ` ${t.nightSooner()}` : ""].join("");
+      // deadPhoneLine already says it when the battery was 15% or less.
+      const saidBattery = typeof battery === "number" && battery <= 15;
+      const why = [batteryBand(spot) && !saidBattery ? ` ${t.quietLowBattery()}` : "", nightAt(at) ? ` ${t.nightSooner()}` : ""].join("");
       return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery, kmLeft }) + why + expected);
     }
     return out("Signal gap", "quiet", (place ? t.jsGapAt({ dead: "", place, at: clock(at) }) : t.jsGap({ dead: "", at: clock(at) })) + expected);
