@@ -5,19 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'">
-  <link rel="icon" href="./favicon.ico" sizes="any">
+  <link rel="icon" href="./img/logo-64.png" type="image/png">
   <link rel="canonical" href="https://nkr741.github.io/hushmile-web/privacy.html">
   <title>Hushmile · Privacy policy</title>
   <style>
-    :root { --bg:#fff; --fg:#16181d; --muted:#4f5663; --blue:#2d69fc; }
-    @media (prefers-color-scheme: dark) { :root { --bg:#061018; --fg:#f7f9fc; --muted:#b7c3d4; } }
+    :root { --bg:#fff; --fg:#16181d; --muted:#4f5663; --blue:#2d69fc; --link:#2d69fc; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#061018; --fg:#f7f9fc; --muted:#b7c3d4; --link:#8ab0ff; } }
     body { margin:0; background:var(--bg); color:var(--fg); font: 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     main { max-width: 680px; margin: 0 auto; padding: 20px 16px 48px; }
     header { display:flex; align-items:center; gap:10px; }
     .mark { width:40px; height:40px; border-radius:10px; }
     h1 { font-size: 24px; margin: 0; } h2 { font-size: 19px; margin-top: 28px; }
-    p, li { color: var(--muted); } a { color: var(--blue); }
-    table { border-collapse: collapse; width: 100%; font-size: 14px; display: block; overflow-x: auto; }
+    p, li { color: var(--muted); } a { color: var(--link); }
+    .scroll { overflow-x: auto; }
+    .scroll:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
     th, td { border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent); padding: 6px 8px; text-align: left; vertical-align: top; color: var(--muted); }
     th { color: var(--fg); }
   </style>
@@ -94,6 +96,7 @@
 
   <h2 id="data-collected">Data collected (Google Play Data safety and App Store privacy label)</h2>
   <p>The same list answers both stores. Hushmile does no tracking: nothing is used for advertising, shared with data brokers, or linked with other companies' data. Journey updates are end-to-end encrypted on the phone, so the Hushmile server cannot read them.</p>
+  <div class="scroll" tabindex="0" role="region" aria-labelledby="data-collected">
   <table>
     <tr><th>Data</th><th>Why</th><th>Linked to you</th><th>Optional</th><th>Kept</th></tr>
     <tr><td>Precise location (journey)</td><td>App functionality: sharing the journey with the people you give the code to (end-to-end encrypted); route, time left and place names (positions sent without your name to Google Maps Platform and OpenStreetMap through our server)</td><td>No</td><td>Needed to share a journey</td><td>Encrypted relay copies expire within 19 hours (12 on ntfy.sh); Google and OpenStreetMap requests are not stored by us; place answers cached by area</td></tr>
@@ -107,6 +110,7 @@
     <tr><td>Device ID: Firebase installation ID and push token (Android)</td><td>App functionality: delivering wake-ups</td><td>No</td><td>Needed for wake-ups</td><td>Until the app is uninstalled</td></tr>
     <tr><td>Weak-signal spots</td><td>App functionality; only with <em>Help map weak signal</em> on; rough areas, no route or code</td><td>No</td><td>Yes, off by default</td><td>Only a count per area</td></tr>
   </table>
+  </div>
   <p>Not collected: contacts (the contact picker gives the app one number on the phone, never sent to us), photos, files, messages, calendar, health, financial data, browsing history, advertising ID.</p>
 
   <h2>This website and web viewer</h2>

@@ -104,3 +104,30 @@ test("journeys from 1.6.8 and older, and code-only links, read as before", async
   await r2.add(PRIMARY_RELAY, w.sign("spot", { km: 8 }), null);
   assert.equal((await latest(CODE, "spot", "3h", r2.fetcher, [PRIMARY_RELAY, FALLBACK_RELAY], null)).km, 8, "code only: signed read as before");
 });
+
+test("a re-posted copy of an old signed update keeps its first time (no replay as fresh)", async () => {
+  resetReads();
+  resetTrust();
+  const traveller = writer(crypto.randomBytes(32));
+  const link = await linkKeyForPub(traveller.pub);
+  const r = relays();
+  const old = traveller.sign("spot", { km: 12, place: "Suryapet", at: "2026-10-30T05:00:00Z" });
+  const fresh = traveller.sign("spot", { km: 40, place: "Kodad", at: "2026-10-30T05:30:00Z" });
+  await r.add(PRIMARY_RELAY, old, link); // time 101
+  await r.add(PRIMARY_RELAY, fresh, link); // time 102
+  // Someone with the link copies the older sealed update and posts it again on ntfy.sh.
+  await r.add(FALLBACK_RELAY, old, link); // time 103
+  let got = await latest(CODE, "spot", "3h", r.fetcher, [PRIMARY_RELAY, FALLBACK_RELAY], link);
+  assert.equal(got.place, "Kodad", "the copy does not win over a newer update");
+  assert.equal(got.relayAt, 102000);
+  // The phone goes quiet and the newest update is re-posted: it is not fresher than it was.
+  await r.add(FALLBACK_RELAY, fresh, link); // time 104
+  got = await latest(CODE, "spot", "3h", r.fetcher, [PRIMARY_RELAY, FALLBACK_RELAY], link);
+  assert.equal(got.place, "Kodad");
+  assert.equal(got.relayAt, 102000, "relay time of the first copy, not the re-post");
+  // A real new update still comes through.
+  await r.add(PRIMARY_RELAY, traveller.sign("spot", { km: 55, place: "Nandigama", at: "2026-10-30T05:40:00Z" }), link); // 105
+  got = await latest(CODE, "spot", "3h", r.fetcher, [PRIMARY_RELAY, FALLBACK_RELAY], link);
+  assert.equal(got.place, "Nandigama");
+  assert.equal(got.relayAt, 105000);
+});
