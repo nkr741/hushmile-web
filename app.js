@@ -30,6 +30,7 @@ function paintPage() {
   $("lang-label").textContent = t.language();
   $("legend-planned-text").textContent = t.mapLegendPlanned();
   $("legend-driven-text").textContent = t.mapLegendDriven();
+  labelMap();
   const select = $("lang");
   select.replaceChildren();
   for (const code of ["system", ...LANGUAGES]) {
@@ -39,6 +40,21 @@ function paintPage() {
     select.append(option);
   }
   select.value = readSaved() || "system";
+}
+
+// The map and its buttons, in the page's language, for screen readers
+// (MapLibre and Leaflet name their zoom buttons in English).
+function labelMap() {
+  $("map").setAttribute("aria-label", t.mapLabel());
+  const name = (selector, text) => {
+    for (const el of $("map").querySelectorAll(selector)) {
+      el.setAttribute("aria-label", text);
+      el.title = text;
+    }
+  };
+  name(".hm-fit", t.mapShowRoute());
+  name(".maplibregl-ctrl-zoom-in, .leaflet-control-zoom-in", t.mapZoomIn());
+  name(".maplibregl-ctrl-zoom-out, .leaflet-control-zoom-out", t.mapZoomOut());
 }
 
 function show(state) {
@@ -159,6 +175,7 @@ async function drawMap(data) {
       box.hidden = true;
       return;
     }
+    labelMap();
   }
   const label = data.last ? mapAgeLine(data.last.at) : "";
   mapView.draw(data, label);

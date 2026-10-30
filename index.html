@@ -9,8 +9,9 @@
   <link rel="stylesheet" href="./vendor/leaflet.css">
   <title>Hushmile · How is the journey going?</title>
   <style>
-    :root { --bg:#fff; --card:#f6f7f9; --fg:#16181d; --muted:#4f5663; --line:#e2e5ea; --calm:#1b7f4e; --checkin:#a15c00; --help:#b42318; --quiet:#4f5663; --blue:#2d69fc; }
-    @media (prefers-color-scheme: dark) { :root { --bg:#061018; --card:#10192a; --fg:#f7f9fc; --muted:#b7c3d4; --line:#2a3a52; --calm:#4cc38a; --checkin:#f5b547; --help:#ff7a70; --quiet:#b7c3d4; } }
+    :root { --bg:#fff; --card:#f6f7f9; --fg:#16181d; --muted:#4f5663; --line:#e2e5ea; --calm:#1b7f4e; --checkin:#a15c00; --help:#b42318; --quiet:#4f5663; --blue:#2d69fc; --link:#2d69fc; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#061018; --card:#10192a; --fg:#f7f9fc; --muted:#b7c3d4; --line:#2a3a52; --calm:#4cc38a; --checkin:#f5b547; --help:#ff7a70; --quiet:#b7c3d4; --link:#8ab0ff; } }
+    a { color: var(--link); }
     * { box-sizing: border-box; }
     body { margin:0; background:var(--bg); color:var(--fg); font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     main { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; }
@@ -60,7 +61,7 @@
       <div id="not-from-phone" class="small" hidden></div>
     </section>
     <section id="help" class="help" hidden><h2 id="help-title"></h2><div id="help-links" class="links"></div><div id="help-search" class="links" style="margin-top:8px"></div><div id="help-note" class="small"></div></section>
-    <section id="map-box" class="map-box" hidden><div id="map" role="img" aria-label="Map"></div><div class="legend"><span id="legend-planned"><i style="background:#2d69fc"></i><span id="legend-planned-text"></span></span><span id="legend-driven" hidden><i style="background:#0e7c66"></i><span id="legend-driven-text"></span></span></div><div id="map-note" class="map-note"></div></section>
+    <section id="map-box" class="map-box" hidden><div id="map" role="region" aria-label="Map of the journey"></div><div class="legend"><span id="legend-planned"><i style="background:#2d69fc"></i><span id="legend-planned-text"></span></span><span id="legend-driven" hidden><i style="background:#0e7c66"></i><span id="legend-driven-text"></span></span></div><div id="map-note" class="map-note"></div></section>
     <form id="form" autocomplete="off">
       <label for="code" id="code-label" class="visually-hidden" style="position:absolute;left:-9999px">Journey Code</label>
       <input id="code" name="code" placeholder="ABCD-EFGH" inputmode="text" autocapitalize="characters" maxlength="200">

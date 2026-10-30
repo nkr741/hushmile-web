@@ -464,10 +464,28 @@ export function relayResting(relay, now = Date.now()) {
   return Boolean(r && now < r.until);
 }
 
+// The first relay time of each message, by channel and plain text. A copy of
+// an old signed update posted again (anyone holding the link can re-post a
+// sealed message on ntfy.sh) keeps the time it first arrived, so it can never
+// look newer or fresher than it is. The app does the same (mergeRelayReads).
+const firstSeen = new Map(); // topic|plain -> relay time (s)
+const FIRST_SEEN_MAX = 4000;
+
+export function firstRelayTime(topic, plain, time) {
+  const key = `${topic}|${plain}`;
+  const known = firstSeen.get(key);
+  if (typeof time !== "number") return known ?? 0;
+  if (known != null && known <= time) return known;
+  firstSeen.set(key, time);
+  if (firstSeen.size > FIRST_SEEN_MAX) firstSeen.delete(firstSeen.keys().next().value);
+  return time;
+}
+
 /** Tests: forget incremental reads and resting relays. */
 export function resetReads() {
   reads.clear();
   resting.clear();
+  firstSeen.clear();
 }
 
 const newer = (a, b) => a && (!b || a.at[0] > b.at[0] || (a.at[0] === b.at[0] && a.at[1] > b.at[1]));
@@ -535,8 +553,9 @@ async function readRelay(relay, topic, code, kind, since, fetcher, link) {
       // This browser cannot check a signature (no Ed25519 at all): as before.
       body = check.clean;
     }
-    const at = [event.time || 0, order++];
-    if (body && typeof body === "object" && typeof event.time === "number") body.relayAt = event.time * 1000;
+    const time = firstRelayTime(topic, plain, event.time);
+    const at = [time, order++];
+    if (body && typeof body === "object" && time > 0) body.relayAt = time * 1000;
     const item = { at, body, plain };
     if (check.state === "valid") {
       if (newer(item, byPub.get(check.pub))) byPub.set(check.pub, item);
