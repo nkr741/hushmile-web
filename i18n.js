@@ -4,6 +4,7 @@ export const STRINGS = {
   en: {
     privacy: (a = {}) => `Privacy`,
     codeNotOpen: (a = {}) => `That Journey Code is not open. Ask them to send it again.`,
+    codeWaiting: (a = {}) => `Leave this page open. The journey appears after they tap Start, usually within a minute. If it never appears, ask them to send the link again.`,
     openingJourney: (a = {}) => `Opening the journey…`,
     language: (a = {}) => `Language`,
     languageSystem: (a = {}) => `Phone language`,
@@ -186,6 +187,7 @@ export const STRINGS = {
   te: {
     privacy: (a = {}) => `ప్రైవసీ`,
     codeNotOpen: (a = {}) => `ఈ జర్నీ కోడ్ ఇప్పుడు పనిచేయడం లేదు. మళ్లీ పంపమని వారిని అడగండి.`,
+    codeWaiting: (a = {}) => `ఈ పేజీని తెరిచి ఉంచండి. డ్రైవర్ ప్రయాణం మొదలుపెట్టిన తర్వాత ఇక్కడ కనిపిస్తుంది, సాధారణంగా ఒక నిమిషంలో. ఈ పేజీ ప్రతి నిమిషం చూస్తుంది. ఏమీ కనిపించకపోతే, లింక్ మళ్లీ పంపమని అడగండి.`,
     openingJourney: (a = {}) => `ప్రయాణం తెరుస్తోంది…`,
     language: (a = {}) => `భాష`,
     languageSystem: (a = {}) => `ఫోన్ భాష`,
@@ -368,6 +370,7 @@ export const STRINGS = {
   hi: {
     privacy: (a = {}) => `प्राइवेसी`,
     codeNotOpen: (a = {}) => `यह जर्नी कोड अभी खुला नहीं है। उनसे दोबारा भेजने को कहें।`,
+    codeWaiting: (a = {}) => `यह पेज खुला रखें। ड्राइवर के सफ़र शुरू करने के बाद यह यहाँ दिखता है, आमतौर पर एक मिनट में। यह पेज हर मिनट देखता है। कुछ भी न दिखे, तो उनसे लिंक दोबारा भेजने को कहें।`,
     openingJourney: (a = {}) => `सफ़र खुल रहा है…`,
     language: (a = {}) => `भाषा`,
     languageSystem: (a = {}) => `फ़ोन की भाषा`,
@@ -550,6 +553,7 @@ export const STRINGS = {
   ta: {
     privacy: (a = {}) => `பிரைவசி`,
     codeNotOpen: (a = {}) => `அந்த பயண கோட் திறந்து இல்லை. மறுபடி அனுப்பச் சொல்லுங்க.`,
+    codeWaiting: (a = {}) => `இந்த பக்கத்தைத் திறந்து வைங்க. டிரைவர் பயணத்தைத் தொடங்கிய பிறகு இங்கே தெரியும், பொதுவாக ஒரு நிமிஷத்தில். இந்தப் பக்கம் ஒவ்வொரு நிமிஷமும் பார்க்கும். ஒன்றும் தெரியலன்னா, லிங்கை மறுபடி அனுப்பச் சொல்லுங்க.`,
     openingJourney: (a = {}) => `பயணத்தைத் திறக்குது…`,
     language: (a = {}) => `மொழி`,
     languageSystem: (a = {}) => `போன் மொழி`,
@@ -732,6 +736,7 @@ export const STRINGS = {
   kn: {
     privacy: (a = {}) => `ಪ್ರೈವಸಿ`,
     codeNotOpen: (a = {}) => `ಆ ಪ್ರಯಾಣ ಕೋಡ್ ತೆರೆದಿಲ್ಲ. ಮತ್ತೆ ಕಳಿಸೋಕೆ ಹೇಳಿ.`,
+    codeWaiting: (a = {}) => `ಈ ಪುಟವನ್ನು ತೆರೆದಿಡಿ. ಡ್ರೈವರ್ ಪ್ರಯಾಣ ಶುರು ಮಾಡಿದ ಮೇಲೆ ಅದು ಇಲ್ಲಿ ಕಾಣಿಸುತ್ತೆ, ಸಾಮಾನ್ಯವಾಗಿ ಒಂದು ನಿಮಿಷದಲ್ಲಿ. ಈ ಪುಟ ಪ್ರತಿ ನಿಮಿಷವೂ ನೋಡುತ್ತೆ. ಏನೂ ಕಾಣಿಸದಿದ್ದರೆ, ಲಿಂಕ್ ಅನ್ನು ಮತ್ತೆ ಕಳಿಸೋಕೆ ಹೇಳಿ.`,
     openingJourney: (a = {}) => `ಪ್ರಯಾಣ ತೆರೀತಿದೆ…`,
     language: (a = {}) => `ಭಾಷೆ`,
     languageSystem: (a = {}) => `ಫೋನ್ ಭಾಷೆ`,

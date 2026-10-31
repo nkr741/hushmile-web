@@ -254,6 +254,12 @@ export async function unwrapLinkKey(code, got) {
 }
 
 const keyLookups = new Map();
+// While the route itself cannot be read (a format 3 journey, code only), ask
+// again on the next refresh, up to this many times. That sits inside the
+// server's burst of 10. After that the 4 minute cache applies, so a page left
+// open for hours does not knock on the key server every minute.
+const keyWaitTries = new Map();
+const KEY_WAIT_TRIES = 6;
 
 /** Family with only the code: the journey's link key from Hushmile's server,
  * or null: no box yet (an older journey, or the traveller's phone has not seen
@@ -1001,7 +1007,7 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   const roads = closed ? [] : roadLines(spot, trip, now);
   const sos = closed ? null : sosBanner(spot, trip, now);
   const help = closed ? null : helpLinks(spot);
-  const out = (title, tone, sentence, live = false) => ({ title, tone, sentence: live ? sentence + low : sentence, lastUpdate: at, kmLeft, battery, charging, speed: speedText, roads, sos, help });
+  const out = (title, tone, sentence, live = false) => ({ title, tone, sentence: live ? sentence + low : sentence, lastUpdate: at, kmLeft: trip ? kmLeft : null, battery, charging, speed: speedText, roads, sos, help });
   if (closed) {
     const end = endSentence(spot, trip, name, to);
     return end.arrived ? out("Arrived safely", "calm", end.sentence) : out("Tracking stopped", "quiet", end.sentence);
@@ -1079,14 +1085,30 @@ export function mapAgeLine(at, now = Date.now()) {
 
 /** link: the key from the page's link; undefined means "ask the server". */
 export async function load(code, fetcher = globalThis.fetch, now = Date.now(), link = undefined) {
-  const key = link === undefined ? await lookUpLinkKey(code, fetcher, now) : link;
+  const asked = link === undefined;
+  const key = asked ? await lookUpLinkKey(code, fetcher, now) : link;
   const [tripBody, spot, dead] = await Promise.all([latest(code, "trip", "12h", fetcher, RELAYS, key), latest(code, "spot", "3h", fetcher, RELAYS, key), latest(code, "dead", "3h", fetcher, RELAYS, key).catch(() => null)]);
   const trip = readTrip(tripBody);
-  if (!trip && !spot) return null;
   const closedTrip = Boolean(tripBody && tripBody.revoked);
-  // Code only (no link key): tell the traveller's phone, so it writes the
-  // old channel and escrows the key for this page.
+  // Code only (no link key): tell the traveller's phone, so it writes points
+  // the code can open and escrows the key for this page. Do this even when
+  // nothing is readable yet. A format 3 journey keeps the route on the
+  // link-key channel only, so returning here without "seen" means the phone
+  // never learns this page is open.
   if (!key && !closedTrip) await noteSeen(code, fetcher, now).catch(() => false);
+  if (!key && !trip && !closedTrip && asked) {
+    const bare = bareCode(code);
+    const n = (keyWaitTries.get(bare) || 0) + 1;
+    keyWaitTries.set(bare, n);
+    if (n <= KEY_WAIT_TRIES) keyLookups.delete(bare);
+  }
+  if (!trip && !spot && !closedTrip) {
+    // A link that already carries the key, and still nothing: not this journey.
+    if (key) return null;
+    // Not started, or the driver's phone has not handed the key over yet.
+    // Leave the page open; it checks again every minute.
+    return { title: "Waiting", tone: "quiet", sentence: t.codeWaiting(), lastUpdate: null, kmLeft: null, battery: null, charging: false, speed: null, roads: [], waiting: true, map: null };
+  }
   let state = viewState({ trip, spot, dead, now, closedTrip });
   // Only a quiet phone needs the weak-signal hint, so only then ask for it.
   if (trip && state.title === "Signal gap") {

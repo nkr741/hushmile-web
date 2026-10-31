@@ -108,6 +108,36 @@ test("code path: a code-only page tells the phone, then gets the scrypt-wrapped 
   assert.equal(asked.filter((u) => u.startsWith(KEY_API)).length, 2);
 });
 
+test("format 3 only: a code-only page waits and tells the phone, then opens once the key is escrowed", async () => {
+  const CODE3 = "PL23-MN45";
+  const messages = {
+    [await topicFor(CODE3, "trip", KEY)]: [await sealFor(CODE3, "trip", JSON.stringify(tripBody), KEY)],
+    [await topicFor(CODE3, "spot", KEY)]: [await sealFor(CODE3, "spot", JSON.stringify(spotBody), KEY)],
+  };
+  const boxes = {};
+  const { fetcher, asked, posted } = relayWith(messages)(boxes);
+  setLanguage("en");
+  // Nothing on the old channel, and no box yet: do not say the code is dead.
+  const first = await load(CODE3, fetcher, now);
+  assert.equal(first.waiting, true);
+  assert.match(first.sentence, /Leave this page open/);
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0].topic, await topicFor(CODE3, "seen"));
+  const seen = JSON.parse(await openFor(CODE3, "seen", posted[0].body));
+  assert.equal(seen.seen, true);
+  assert.equal(seen.v, undefined, "a code-only page must not send v:3, or the phone will not escrow");
+  // Still no box a minute later: ask again. A 4 minute cache would leave the page blank.
+  const mid = await load(CODE3, fetcher, now + 60000);
+  assert.equal(mid.waiting, true);
+  assert.equal(asked.filter((u) => u.startsWith(KEY_API)).length, 2);
+  // The driver's phone escrows. The next refresh opens the format 3 journey.
+  boxes[await escrowId(CODE3)] = await wrapLinkKey(CODE3, KEY);
+  const later = await load(CODE3, fetcher, now + 120000);
+  assert.equal(later.kmLeft, 60);
+  assert.equal(later.waiting, undefined);
+  assert.equal(asked.filter((u) => u.startsWith(KEY_API)).length, 3);
+});
+
 test("old journeys (format 2) still open: no key on the server, or a key with nothing behind it", async () => {
   const OLD = "ZX23-CV45";
   const messages = {
