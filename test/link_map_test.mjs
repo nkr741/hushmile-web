@@ -138,6 +138,17 @@ test("format 3 only: a code-only page waits and tells the phone, then opens once
   assert.equal(asked.filter((u) => u.startsWith(KEY_API)).length, 3);
 });
 
+test("a keyed link with no journey yet waits and does not say the code is not open", async () => {
+  const CODE4 = "RT23-YN45";
+  const { fetcher, asked, posted } = relayWith({})();
+  setLanguage("en");
+  const first = await load(CODE4, fetcher, now, KEY);
+  assert.equal(first.waiting, true);
+  assert.match(first.sentence, /Leave this page open/);
+  assert.equal(posted.length, 0, "a keyed link must not send seen");
+  assert.ok(!asked.some((u) => u.startsWith(KEY_API)), "a keyed link does not ask the server for a key");
+});
+
 test("old journeys (format 2) still open: no key on the server, or a key with nothing behind it", async () => {
   const OLD = "ZX23-CV45";
   const messages = {

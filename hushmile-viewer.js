@@ -1103,10 +1103,9 @@ export async function load(code, fetcher = globalThis.fetch, now = Date.now(), l
     if (n <= KEY_WAIT_TRIES) keyLookups.delete(bare);
   }
   if (!trip && !spot && !closedTrip) {
-    // A link that already carries the key, and still nothing: not this journey.
-    if (key) return null;
-    // Not started, or the driver's phone has not handed the key over yet.
-    // Leave the page open; it checks again every minute.
+    // Nothing to read yet. A key in the link does not mean the journey is
+    // dead: it may not have started. Leave the page open. Do not send
+    // "seen" when the link already has the key.
     return { title: "Waiting", tone: "quiet", sentence: t.codeWaiting(), lastUpdate: null, kmLeft: null, battery: null, charging: false, speed: null, roads: [], waiting: true, map: null };
   }
   let state = viewState({ trip, spot, dead, now, closedTrip });
