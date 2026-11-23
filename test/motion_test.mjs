@@ -59,3 +59,32 @@ test("a push on the journey's channels wakes the page; polling stays the fallbac
   assert.equal(wakeUrl("habc"), `${PRIMARY_RELAY}/habc/sse`);
   assert.ok(WAKE_DELAY_MS > 0 && WAKE_DELAY_MS <= 3000);
 });
+
+test("reads never overlap; a read asked for meanwhile runs once after", async () => {
+  const { oneAtATime } = await import("../hushmile-viewer.js");
+  const log = [];
+  let open = 0;
+  let most = 0;
+  const release = [];
+  const read = oneAtATime(async (code) => {
+    open++;
+    most = Math.max(most, open);
+    log.push(code);
+    await new Promise((r) => release.push(r));
+    open--;
+  });
+  read("A");
+  read("A"); // a push during the poll
+  read("B"); // the newest ask wins
+  assert.deepEqual(log, ["A"]);
+  release.shift()();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(log, ["A", "B"]);
+  release.shift()();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(most, 1);
+  assert.deepEqual(log, ["A", "B"], "nothing more queued");
+  read("C");
+  assert.deepEqual(log, ["A", "B", "C"]);
+  release.shift()();
+});

@@ -1177,3 +1177,30 @@ export async function wakeTopics(code, key) {
 
 /** The push stream URL for one topic on the app's own relay. */
 export const wakeUrl = (topic) => `${PRIMARY_RELAY}/${topic}/sse`;
+
+/**
+ * Wraps an async [run] so only one runs at a time. A call made while one
+ * runs is not dropped: the last such call runs once, right after.
+ */
+export function oneAtATime(run) {
+  let busy = false;
+  let pending = null;
+  const go = async (arg) => {
+    if (busy) {
+      pending = { arg };
+      return;
+    }
+    busy = true;
+    try {
+      await run(arg);
+    } finally {
+      busy = false;
+      if (pending) {
+        const next = pending.arg;
+        pending = null;
+        go(next);
+      }
+    }
+  };
+  return go;
+}

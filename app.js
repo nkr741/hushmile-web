@@ -1,6 +1,6 @@
 import { createMap } from "./map-view.js";
 import { mapConfig } from "./map-config.js";
-import { bareCode, clock, language, LANGUAGES, linkKeyText, load, mapAgeLine, pickLanguage, readInput, setLanguage, t, WAKE_DELAY_MS, wakeTopics, wakeUrl } from "./hushmile-viewer.js";
+import { bareCode, clock, language, LANGUAGES, linkKeyText, load, mapAgeLine, pickLanguage, readInput, setLanguage, t, oneAtATime, WAKE_DELAY_MS, wakeTopics, wakeUrl } from "./hushmile-viewer.js";
 import { LANGUAGE_INFO } from "./i18n.js";
 
 const bands = { calm: "toneCalm", checkin: "toneCheckin", help: "toneHelp", quiet: "toneQuiet" };
@@ -185,7 +185,12 @@ async function drawMap(data) {
   $("map-note").textContent = label;
 }
 
-async function refresh(code) {
+// One read at a time: a push and the minute's poll can land together. A
+// read asked for while one runs is done once, right after it (it may hold
+// a newer update), for the journey asked for last.
+const refresh = oneAtATime((code) => readOnce(code));
+
+async function readOnce(code) {
   try {
     // With the key from the link; a code-only link asks the server for it.
     const state = await load(code, globalThis.fetch, Date.now(), currentKey || undefined);
@@ -215,8 +220,15 @@ function start(input) {
   $("sentence").textContent = t.openingJourney();
   clearInterval(timer);
   refresh(shown);
-  timer = setInterval(() => refresh(shown), 60000);
+  // A hidden tab skips the poll; it reads at once when shown again.
+  timer = setInterval(() => {
+    if (!document.hidden) refresh(shown);
+  }, 60000);
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && current) refresh(current);
+});
 
 // A push from the relay (server-sent events) as soon as the phone posts:
 // the page reads the new update at once instead of waiting for the next
@@ -240,7 +252,7 @@ async function listen(code, key) {
       s.addEventListener("message", () => {
         clearTimeout(wakeTimer);
         wakeTimer = setTimeout(() => {
-          if (current === code) refresh(code);
+          if (current === code && !document.hidden) refresh(code);
         }, WAKE_DELAY_MS);
       });
       // On error the browser retries by itself; the minute's poll covers the gap.
