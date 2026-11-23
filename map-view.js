@@ -21,6 +21,44 @@ export function haloRadius(metres, lat) {
   return ["interpolate", ["exponential", 2], ["zoom"], 0, metres / base, 22, (metres * 4194304) / base];
 }
 
+// The vehicle glides to each new place over GLIDE_MS instead of jumping
+// (app 1.8.2), and turns the short way round. A move over GLIDE_MAX_M (a long
+// signal gap) or "reduce motion" jumps at once. Only the drawing moves: the
+// age shown is still the real last update's.
+export const GLIDE_MS = 1200;
+export const GLIDE_MAX_M = 2000;
+
+export function lerpPoint(a, b, t) {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+export function lerpBearing(a, b, t) {
+  const d = ((((b - a + 540) % 360) + 360) % 360) - 180;
+  return (((a + d * t) % 360) + 360) % 360;
+}
+
+export const ease = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
+
+/** Metres between two [lng, lat] points (haversine). */
+export function metresApart(a, b) {
+  const r = 6371000;
+  const p1 = (a[1] * Math.PI) / 180, p2 = (b[1] * Math.PI) / 180;
+  const dp = p2 - p1, dl = ((b[0] - a[0]) * Math.PI) / 180;
+  const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(Math.min(1, h)));
+}
+
+export function shouldGlide(from, to, reduced = false) {
+  return !reduced && Array.isArray(from) && Array.isArray(to) && (from[0] !== to[0] || from[1] !== to[1]) && metresApart(from, to) <= GLIDE_MAX_M;
+}
+
+/** Where the vehicle marker is drawn: on the route when snapped, [lng, lat]. */
+export function markerLngLat(last) {
+  if (!last) return null;
+  const at = Array.isArray(last.mark) ? last.mark : [last.lat, last.lng];
+  return [at[1], at[0]];
+}
+
 /** GeoJSON for what the map draws (exported for tests). */
 export function mapFeatures(data) {
   const line = (pts) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: pts.map(([lat, lng]) => [lng, lat]) } });
@@ -101,6 +139,7 @@ function maplibreMap(gl, el) {
   let fitted = false;
   let current = null;
   const markers = { start: null, end: null, vehicle: null };
+  let gliding = 0;
   const ready = new Promise((resolve) => map.on("load", resolve));
 
   function fit() {
@@ -171,12 +210,30 @@ function maplibreMap(gl, el) {
     const lastR = data.route.length > 1 ? data.route[data.route.length - 1] : null;
     place("start", () => pin("start", colors), first && [first[1], first[0]]);
     place("end", () => pin("end", colors), lastR && [lastR[1], lastR[0]], { anchor: "bottom" });
-    const v = place("vehicle", vehicle, data.last && [data.last.lng, data.last.lat], { rotationAlignment: "map" });
+    const target = markerLngLat(data.last);
+    const before = markers.vehicle ? markers.vehicle.getLngLat().toArray() : null;
+    const turnFrom = markers.vehicle ? markers.vehicle.getRotation() : 0;
+    const v = place("vehicle", vehicle, before && target ? before : target, { rotationAlignment: "map" });
     if (v) {
       const el = v.getElement();
       el.classList.toggle("stale", Boolean(stale));
       el.classList.toggle("no-heading", stale || typeof data.last.hdg !== "number");
-      v.setRotation(!stale && typeof data.last.hdg === "number" ? data.last.hdg : 0);
+      const turnTo = !stale && typeof data.last.hdg === "number" ? data.last.hdg : 0;
+      cancelAnimationFrame(gliding);
+      const reduced = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (shouldGlide(before, target, reduced)) {
+        const t0 = performance.now();
+        const step = (now) => {
+          const k = ease((now - t0) / GLIDE_MS);
+          v.setLngLat(lerpPoint(before, target, k));
+          v.setRotation(lerpBearing(turnFrom, turnTo, k));
+          if (k < 1) gliding = requestAnimationFrame(step);
+        };
+        gliding = requestAnimationFrame(step);
+      } else {
+        v.setLngLat(target);
+        v.setRotation(turnTo);
+      }
       el.title = label || "";
       el.setAttribute("aria-label", label || "");
     }
