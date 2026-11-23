@@ -42,6 +42,14 @@ test("on track sentence and km left", () => {
   assert.match(s.sentence, /^On time\. About 60 minutes to go\.$/);
 });
 
+test("a longer traffic estimate at the start is not well behind", () => {
+  const fresh = { name: "Raju", to: "Vijayawada", start: now - 2 * 60000, totalKm: 264, speedKmh: 60 };
+  const s = viewState({ trip: fresh, spot: { km: 1, updatedAt: now, movedAt: now, roadMin: 310, place: "Nacharam" }, now });
+  assert.equal(s.title, "On track");
+  assert.match(s.sentence, /310/);
+  assert.doesNotMatch(s.sentence, /well behind/);
+});
+
 test("delay gives one honest reason and never invents traffic", () => {
   const s = viewState({ trip, spot: { km: 30, updatedAt: now - 60000, movedAt: now - 60000, paceKmh: 35 }, now });
   assert.equal(s.title, "At risk");

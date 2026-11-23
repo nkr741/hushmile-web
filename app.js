@@ -1,6 +1,6 @@
 import { createMap } from "./map-view.js";
 import { mapConfig } from "./map-config.js";
-import { bareCode, clock, language, LANGUAGES, linkKeyText, load, mapAgeLine, pickLanguage, readInput, setLanguage, t } from "./hushmile-viewer.js";
+import { bareCode, clock, language, LANGUAGES, linkKeyText, load, mapAgeLine, pickLanguage, readInput, setLanguage, t, oneAtATime, WAKE_DELAY_MS, wakeTopics, wakeUrl } from "./hushmile-viewer.js";
 import { LANGUAGE_INFO } from "./i18n.js";
 
 const bands = { calm: "toneCalm", checkin: "toneCheckin", help: "toneHelp", quiet: "toneQuiet" };
@@ -146,7 +146,8 @@ function leafletMap(el) {
       if (data.last) {
         const stale = data.last.at != null && Date.now() - data.last.at > 15 * 60000;
         if (data.last.acc) L.circle([data.last.lat, data.last.lng], { radius: data.last.acc, color: stale ? c.stale : c.driven, weight: 1, fillOpacity: 0.14 }).addTo(layers);
-        L.circleMarker([data.last.lat, data.last.lng], { radius: 9, color: "#fff", weight: 3, fillColor: stale ? c.stale : c.driven, fillOpacity: 1 })
+        const mark = Array.isArray(data.last.mark) ? data.last.mark : [data.last.lat, data.last.lng];
+        L.circleMarker(mark, { radius: 9, color: "#fff", weight: 3, fillColor: stale ? c.stale : c.driven, fillOpacity: 1 })
           .bindTooltip(label, { permanent: true, direction: "top", offset: [0, -10] })
           .addTo(layers);
         bounds.push([data.last.lat, data.last.lng]);
@@ -184,7 +185,12 @@ async function drawMap(data) {
   $("map-note").textContent = label;
 }
 
-async function refresh(code) {
+// One read at a time: a push and the minute's poll can land together. A
+// read asked for while one runs is done once, right after it (it may hold
+// a newer update), for the journey asked for last.
+const refresh = oneAtATime((code) => readOnce(code));
+
+async function readOnce(code) {
   try {
     // With the key from the link; a code-only link asks the server for it.
     const state = await load(code, globalThis.fetch, Date.now(), currentKey || undefined);
@@ -193,6 +199,7 @@ async function refresh(code) {
       return;
     }
     show(state);
+    listen(code, state.linkKey);
   } catch {
     show({ tone: "quiet", sentence: t.webRelayFail(), lastUpdate: null, kmLeft: null, battery: null });
   }
@@ -213,7 +220,47 @@ function start(input) {
   $("sentence").textContent = t.openingJourney();
   clearInterval(timer);
   refresh(shown);
-  timer = setInterval(() => refresh(shown), 60000);
+  // A hidden tab skips the poll; it reads at once when shown again.
+  timer = setInterval(() => {
+    if (!document.hidden) refresh(shown);
+  }, 60000);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && current) refresh(current);
+});
+
+// A push from the relay (server-sent events) as soon as the phone posts:
+// the page reads the new update at once instead of waiting for the next
+// minute's poll. The push only says "something new"; the update itself is
+// still read, checked and decrypted by refresh(). Polling stays as the
+// fallback when the stream is not available (older browser, blocked network).
+let streams = [];
+let streamFor = "";
+let wakeTimer = null;
+async function listen(code, key) {
+  if (typeof EventSource !== "function") return;
+  const topics = await wakeTopics(code, key).catch(() => []);
+  const sig = `${code}|${topics.join(",")}`;
+  if (current !== code || sig === streamFor) return;
+  for (const s of streams) s.close();
+  streams = [];
+  streamFor = sig;
+  for (const topic of topics) {
+    try {
+      const s = new EventSource(wakeUrl(topic));
+      s.addEventListener("message", () => {
+        clearTimeout(wakeTimer);
+        wakeTimer = setTimeout(() => {
+          if (current === code && !document.hidden) refresh(code);
+        }, WAKE_DELAY_MS);
+      });
+      // On error the browser retries by itself; the minute's poll covers the gap.
+      streams.push(s);
+    } catch {
+      // No stream: polling only.
+    }
+  }
 }
 
 $("form").addEventListener("submit", (event) => {

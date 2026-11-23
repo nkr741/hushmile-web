@@ -1042,9 +1042,13 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   const said = typeof spot.checkin === "string" && spot.checkin !== "help" ? spot.checkin : null;
   if (stillMin >= stopMin && !said) return out("Check-in requested", "checkin", `${lead}${place ? t.jsStoppedLongAt({ place }) : t.jsStoppedLong()}`, true);
   const speed = trip ? trip.speedKmh : 60;
-  const moveMin = typeof spot.roadMin === "number" ? spot.roadMin : (kmLeft / speed) * 60;
-  const arrivesAt = trip && trip.start ? trip.start + (total / speed) * 3600000 : null;
-  const late = arrivesAt ? Math.round((now + moveMin * 60000 - arrivesAt) / 60000) : 0;
+  const plannedMin = (kmLeft / speed) * 60;
+  const moveMin = typeof spot.roadMin === "number" ? spot.roadMin : plannedMin;
+  // Time already lost against the plan. A longer traffic estimate is the
+  // time left, not the person falling behind at the start.
+  const coveredMin = ((total - kmLeft) / speed) * 60;
+  const elapsedMin = trip && trip.start ? (now - trip.start) / 60000 : 0;
+  const late = Math.round(elapsedMin - coveredMin);
   const minutes = moveMin >= 1 ? Math.round(moveMin) : null;
   if (late > 8) {
     const why = delayReason({ stillMin, stopsMin: Number(spot.stopsMin) || 0, paceKmh: typeof spot.paceKmh === "number" ? Math.round(spot.paceKmh) : null, plannedKmh: speed, driverSaid: said, why: typeof spot.why === "string" ? spot.why : null, whyPlace: typeof spot.whyPlace === "string" ? spot.whyPlace : "", offKm: typeof spot.offKm === "number" ? spot.offKm : 0, stopPlace: place || "", stopKind: typeof spot.stopKind === "string" ? spot.stopKind : null }) || (said ? `${checkinLabel(said)}.` : t.jsNoReason());
@@ -1073,8 +1077,43 @@ export function mapData(trip, spot) {
   // Heading (degrees) for the arrow and accuracy (metres) for the halo, when sent.
   if (last && typeof spot.hdg === "number" && Number.isFinite(spot.hdg)) last.hdg = spot.hdg;
   if (last && typeof spot.acc === "number" && spot.acc > 0 && spot.acc < 5000) last.acc = spot.acc;
+  // The marker sits on the route line when the phone is within a few dozen
+  // metres of it (GPS wobble), and at the real place on a detour (app 1.8.2).
+  if (last) {
+    const on = snapToRoute(route, last.lat, last.lng);
+    if (on) last.mark = on;
+  }
   if (!route.length && !trail.length && !last) return null;
   return { route, trail, last };
+}
+
+/** How near the route a place is drawn on it, metres (same as the app). */
+export const SNAP_CORRIDOR_M = 60;
+
+/**
+ * The nearest point on the route [[lat, lng], ...] when within [corridorM]
+ * of it, else null. Exact projection on each segment in a local flat frame.
+ */
+export function snapToRoute(route, lat, lng, corridorM = SNAP_CORRIDOR_M) {
+  if (!Array.isArray(route) || route.length < 2) return null;
+  const kx = 111320 * Math.cos((lat * Math.PI) / 180);
+  const ky = 110540;
+  let best = null;
+  let bestD = Infinity;
+  for (let i = 1; i < route.length; i++) {
+    const [aLat, aLng] = route[i - 1];
+    const [bLat, bLng] = route[i];
+    const ax = (aLng - lng) * kx, ay = (aLat - lat) * ky;
+    const dx = (bLng - aLng) * kx, dy = (bLat - aLat) * ky;
+    const len = dx * dx + dy * dy;
+    const t = len === 0 ? 0 : Math.min(1, Math.max(0, -(ax * dx + ay * dy) / len));
+    const d = Math.hypot(ax + dx * t, ay + dy * t);
+    if (d < bestD) {
+      bestD = d;
+      best = [aLat + (bLat - aLat) * t, aLng + (bLng - aLng) * t];
+    }
+  }
+  return bestD <= corridorM ? best : null;
 }
 
 /** "Last known place, 12 min ago" for the map marker. */
@@ -1106,7 +1145,7 @@ export async function load(code, fetcher = globalThis.fetch, now = Date.now(), l
     // Nothing to read yet. A key in the link does not mean the journey is
     // dead: it may not have started. Leave the page open. Do not send
     // "seen" when the link already has the key.
-    return { title: "Waiting", tone: "quiet", sentence: t.codeWaiting(), lastUpdate: null, kmLeft: null, battery: null, charging: false, speed: null, roads: [], waiting: true, map: null };
+    return { title: "Waiting", tone: "quiet", sentence: t.codeWaiting(), lastUpdate: null, kmLeft: null, battery: null, charging: false, speed: null, roads: [], waiting: true, map: null, linkKey: key || null };
   }
   let state = viewState({ trip, spot, dead, now, closedTrip });
   // Only a quiet phone needs the weak-signal hint, so only then ask for it.
@@ -1118,5 +1157,50 @@ export async function load(code, fetcher = globalThis.fetch, now = Date.now(), l
   // Something sealed with this journey's link but not signed by the
   // traveller's phone was dropped: say so, quietly.
   if (notFromPhoneCount(code) > 0) state.notFromPhone = t.webNotFromPhone({ name: (trip && trip.name) || "" });
+  // The key this read used, so the page can listen on the same channels.
+  state.linkKey = key || null;
   return state;
+}
+
+/** Pause after a push before reading, so a burst becomes one read. */
+export const WAKE_DELAY_MS = 1500;
+
+/**
+ * The relay topics a new place arrives on: the link-key channel and, when
+ * the phone also writes for code-only pages, the code channel.
+ */
+export async function wakeTopics(code, key) {
+  const out = new Set([await topicFor(code, "spot", key || null)]);
+  if (key) out.add(await topicFor(code, "spot", null));
+  return [...out];
+}
+
+/** The push stream URL for one topic on the app's own relay. */
+export const wakeUrl = (topic) => `${PRIMARY_RELAY}/${topic}/sse`;
+
+/**
+ * Wraps an async [run] so only one runs at a time. A call made while one
+ * runs is not dropped: the last such call runs once, right after.
+ */
+export function oneAtATime(run) {
+  let busy = false;
+  let pending = null;
+  const go = async (arg) => {
+    if (busy) {
+      pending = { arg };
+      return;
+    }
+    busy = true;
+    try {
+      await run(arg);
+    } finally {
+      busy = false;
+      if (pending) {
+        const next = pending.arg;
+        pending = null;
+        go(next);
+      }
+    }
+  };
+  return go;
 }

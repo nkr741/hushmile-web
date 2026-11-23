@@ -11,7 +11,7 @@ api.hushmile.com, wrapped with scrypt(code, per-journey salt) and never
 readable by the server; the page asks for it every 4 minutes (the server
 rate-limits lookups) and then reads the new channel. Journeys from older apps
 have no key and are read as before. See docs/LINK_KEY.md in the app repo. The fragment is never sent to the web server. The page polls
-Hushmile's relay (api.hushmile.com) and ntfy.sh once a minute, keeps the newest, decrypts in the browser (PBKDF2-HMAC-SHA256 150,000
+Hushmile's relay (api.hushmile.com) and ntfy.sh once a minute, and reads at once when the relay pushes a new update (server-sent events on the journey's channel; polling stays the fallback), keeps the newest, decrypts in the browser (PBKDF2-HMAC-SHA256 150,000
 rounds, AES-256-GCM, the same scheme as the app) and shows the status
 sentence, last update and kilometres left.
 
