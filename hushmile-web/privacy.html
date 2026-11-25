@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Hushmile</title>
+  <script>
+    (function () {
+      var path = location.pathname.replace(/^\/hushmile-web\/?/, "/") || "/";
+      location.replace(path + location.search + location.hash);
+    })();
+  </script>
+</head>
+<body>
+  <p>This page now lives at <a id="to" href="/privacy.html">watch.hushmile.com/privacy.html</a>.</p>
+  <script>
+    document.getElementById("to").href = (location.pathname.replace(/^\/hushmile-web\/?/, "/") || "/") + location.search + location.hash;
+  </script>
+</body>
+</html>
