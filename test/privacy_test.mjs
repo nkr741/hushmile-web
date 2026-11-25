@@ -36,7 +36,7 @@ test("the travel desk is not offered for school buses", () => {
   assert.match(page, /aged 18 and over/);
 });
 
-test("company-trip live facts and fuel fills (app 1.0.0) are disclosed in every language", () => {
+test("company-trip live facts and fuel fills are disclosed in every language", () => {
   assert.match(page, /<span id="desk-live">/);
   assert.match(page, /speed, average moving speed and distance driven/);
   assert.match(page, /not an emergency service/);
@@ -44,8 +44,13 @@ test("company-trip live facts and fuel fills (app 1.0.0) are disclosed in every 
   assert.match(page, /note a fuel fill on the trip/);
   assert.match(page, /no bill photo is taken or stored/);
   assert.match(page, /Fuel fills on a company trip/);
+  // Each language says the company desk sees the vehicle's place and speed
+  // during a company trip. No app version is named: the Play version (1.8.x)
+  // and the new build numbers (1.x) would read as contradictory.
+  const desk = { ta: /டெஸ்க்/, kn: /ಡೆಸ್ಕ್/, te: /డెస్క్/, hi: /डेस्क/ };
   for (const lang of ["ta", "kn", "te", "hi"]) {
     const block = page.split(`<details lang="${lang}">`)[1].split("</details>")[0];
-    assert.match(block, /1\.0\.0/, lang);
+    assert.match(block, desk[lang], lang);
   }
+  assert.doesNotMatch(page, /app version 1\.0\.0|build 122/);
 });
