@@ -201,3 +201,17 @@ test("battery shows with charging, and under 10% the family is told updates may 
   const low = viewState({ trip, spot: { km: 60, updatedAt: now - 60000, movedAt: now - 60000, battery: 7 }, now });
   assert.match(low.sentence, /Battery 7% and not charging, so updates may stop soon\.$/);
 });
+
+test("pickup line on a company trip: near with minutes, here, and only while fresh", async () => {
+  const { pickupLines, roadLines, setLanguage: lang } = await import("../hushmile-viewer.js");
+  lang("en");
+  const now = 1_000_000_000;
+  const near = { km: 1, updatedAt: now - 60000, pickup: { stage: "near", etaMin: 9 } };
+  assert.deepEqual(pickupLines(near, now), ["The cab is about 9 min from the pickup.", "A rough guess from the distance and the average speed. It does not count traffic."]);
+  assert.equal(roadLines(near, null, now)[0], "The cab is about 9 min from the pickup.");
+  assert.deepEqual(pickupLines({ ...near, pickup: { stage: "here" } }, now), ["The cab has reached the pickup."]);
+  assert.deepEqual(pickupLines({ ...near, updatedAt: now - 16 * 60000 }, now), []);
+  assert.deepEqual(pickupLines({ ...near, pickup: { stage: "near" } }, now), []);
+  assert.deepEqual(pickupLines({ km: 1, updatedAt: now }, now), []);
+  assert.deepEqual(pickupLines({ ...near, pickup: { stage: "left" } }, now), []);
+});

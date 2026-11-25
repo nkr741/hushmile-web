@@ -885,9 +885,24 @@ export function repliedLine(spot, now = Date.now()) {
   return t.repliedAgo({ what, ago });
 }
 
+/** A company trip's pickup (app 1.1.0): "about N min from the pickup" or
+ * "reached the pickup", from the travel desk's own estimate (distance and
+ * the trip's average speed, never live traffic). Only while the update it
+ * came with is recent. */
+export const PICKUP_SHOWN_FOR_MS = 15 * 60000;
+export function pickupLines(spot, now = Date.now()) {
+  const p = spot && spot.pickup;
+  if (!p || typeof p !== "object") return [];
+  const at = typeof spot.updatedAt === "number" ? spot.updatedAt : null;
+  if (at == null || now - at > PICKUP_SHOWN_FOR_MS) return [];
+  if (p.stage === "here") return [t.webPickupHere()];
+  if (p.stage === "near" && Number.isFinite(p.etaMin) && p.etaMin >= 1 && p.etaMin <= 120) return [t.webPickupNear({ n: Math.round(p.etaMin) }), t.webPickupHow()];
+  return [];
+}
+
 export function roadLines(spot, trip = null, now = Date.now()) {
   if (!spot) return [];
-  const lines = [];
+  const lines = [...pickupLines(spot, now)];
   const text = (k) => (typeof spot[k] === "string" ? spot[k].trim() : "");
   const replied = repliedLine(spot, now);
   if (replied) lines.push(replied);

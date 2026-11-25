@@ -27,7 +27,7 @@
 <body>
 <main>
   <header><a href="./"><img class="mark" src="./img/logo-64.png" width="40" height="40" alt="Hushmile home"></a><h1>Hushmile privacy policy</h1></header>
-  <p>Last updated 25 November 2026 (app version 1.0.0, build 122). Applies to the Hushmile Android app (app.hushmile.journey) and the web viewer at watch.hushmile.com. Older links at nkr741.github.io/hushmile-web open the same pages. This is the privacy policy linked from Google Play.</p>
+  <p>Last updated 25 November 2026 (app version 1.1.0, build 123). Applies to the Hushmile Android app (app.hushmile.journey) and the web viewer at watch.hushmile.com. Older links at nkr741.github.io/hushmile-web open the same pages. This is the privacy policy linked from Google Play.</p>
 
   <h2>In short</h2>
   <p>Hushmile lets someone share one road trip with the people they choose. A family journey needs no account. A travel company can create a desk account. Hushmile runs its own small server (api.hushmile.com) that relays encrypted updates and passes place search and traffic times to Google. It cannot read journey updates. Those updates are encrypted on the traveller's phone with a key made from the Journey Code and a random link key that travels only in the shared link. Only someone with that code can read them. We cannot read them. We do not sell personal data.</p>
@@ -63,6 +63,9 @@
     <li><strong>Bookings</strong>: vehicle number, from and to text, trip type, watcher name, driver name and contact number if the office typed them, the company's own reference, note, branch and milestone text, the time to start, status and its times (created, started, arrived or ended and why, last update from the driver page), and for a company trip from app version 1.0.0 the last place, its time and direction, speed, average speed, distance driven and odometer readings and any fuel fills the driver noted (time, litres, amount paid, odometer, GPS distance at the time), how many calls and messages the office logged, whether a status was seen, failed 4-digit tries, a hash of the start secret and of the 4-digit number, and the sealed Journey Code box the server cannot open. With each booking, its status history (from, to, what happened and the time). Kept 30 days from creation, or until the office erases the booking or the company is deleted.</li>
     <li><strong>Vehicles</strong> (number plates), <strong>weekly trips</strong> (vehicle, from, to, trip type, watcher, driver, time and weekdays), <strong>booking keys</strong> (a hash only), <strong>daily counts</strong> (bookings, calls and messages per day) and <strong>import rows</strong> (which spreadsheet row made which booking, so a re-upload does not duplicate it). Kept until removed or the company is deleted; import rows go with their booking.</li>
     <li><strong>Group codes</strong>: name, a hash of the code, the bookings in it, at most 7 days.</li>
+    <li><strong>Passenger and pickup</strong> (app 1.1.0, only if the office adds them): the passenger's name and phone and the pickup point. Only the company's desk and that trip's driver see the phone. When the cab is close to the pickup or there, the desk and driver can message the passenger from their own phone (WhatsApp or SMS); Hushmile does not send it and does not see it. The "about N minutes" is a rough guess from the distance and the trip's average speed, not traffic. Kept with the booking.</li>
+    <li><strong>Trip sheet and alerts</strong> (app 1.1.0): the stops on the road (start, end, place), toll and parking amounts the driver or office typed (no slip photo), and the alerts raised for the company's desk (SOS, phone quiet, long stop, off route, late start, near or at the pickup). Kept with the booking. Alerts need the driver's phone to have signal; Hushmile is not an emergency service: call 112.</li>
+    <li><strong>Group headcount</strong> (app 1.1.0): the names the guide adds, a phone number only if the guide adds one for reminders, who tapped "back on the bus" for the current halt, and the halt time and place. The guide's and the group's links are random keys after the # in the link; the server keeps only a hash of each. The group's link shows names only, never a phone number or a location. Kept with the booking.</li>
   </ul>
   <p>No map trail, family journey or Journey Code is stored for a desk; for a company trip only the last place is kept, with the booking. A dispatcher or admin can remove their own sign-in in the app (Travel desk, <em>Leave this desk</em>).</p>
 
@@ -104,6 +107,8 @@
     <tr><td>Phone number (SOS)</td><td>App functionality: lets the family call you from an SOS alert; inside the encrypted update, only while SOS is on</td><td>No</td><td>Yes</td><td>On your phone; the update expires with the journey</td></tr>
     <tr><td>Email address, company name, password hash (travel desk)</td><td>Account management for the desk</td><td>Yes</td><td>Only for companies</td><td>Until the person leaves the desk or the company is deleted</td></tr>
     <tr><td>Desk bookings: driver name and contact number typed by the office, vehicle, places, times, status</td><td>App functionality for the company</td><td>Yes, to the company account</td><td>Only for companies</td><td>30 days, or sooner if erased</td></tr>
+    <tr><td>Passenger name and phone, pickup point, group headcount names (company trips)</td><td>App functionality for the company: only if the office or guide adds them</td><td>Yes, to the company account</td><td>Yes</td><td>30 days, or sooner if erased</td></tr>
+    <tr><td>Stops, toll and parking amounts, desk alerts (company trips)</td><td>App functionality for the company: trip sheet and alerts; no photos</td><td>Yes, to the company account</td><td>Tolls and parking: yes</td><td>30 days, or sooner if erased</td></tr>
     <tr><td>Fuel fills on a company trip (litres, amount paid, odometer)</td><td>App functionality for the company: only if the driver notes a fill; no bill photo</td><td>Yes, to the company account</td><td>Yes</td><td>30 days, or sooner if erased</td></tr>
     <tr><td>Audio (voice command)</td><td>App functionality; only with <em>Allow online speech</em> on, sent by the phone to its own speech service, not to Hushmile</td><td>No</td><td>Yes, off by default</td><td>Not kept by Hushmile</td></tr>
     <tr><td>Crash logs (error reports)</td><td>App stability: app version and error type</td><td>No</td><td>Yes, off by default</td><td>Latest 200 reports</td></tr>
@@ -150,6 +155,7 @@
       <p>குரல்: சத்தமா படிக்கிறது உங்க போனோட சொந்தக் குரலை யூஸ் பண்ணும், இன்டர்நெட் இல்லாமலும் வேலை செய்யும். குரல் கமாண்ட்கள் போன்லயே இருக்கிற ஸ்பீச் ரெகக்னிஷனை யூஸ் பண்ணும். செட்டிங்ஸ்ல ஆன்லைன் ஸ்பீச்சை நீங்க அனுமதிச்சு, உங்க மொழியை போன் ஆஃப்லைன்ல புரிஞ்சுக்க முடியலைன்னா மட்டும்தான், கமாண்டோட சத்தம் வார்த்தைகளா மாற உங்க போனோட ஸ்பீச் சர்வீஸுக்கு (பெரும்பாலும் Google) போகும். நீங்க சொல்றதை Hushmile எப்பவும் ரெக்கார்டு பண்ணாது, வெச்சுக்காது, அதோட உங்க லொகேஷனையோ பயண கோட்டையோ அனுப்பாது.</p>
       <p>எரர் ரிப்போர்ட்: செட்டிங்ஸ்ல ‘எரர் ரிப்போர்ட் அனுப்புங்க’-ஐ நீங்க ஆன் பண்ணாதான். அப்போ ஆப்ல எரர் வந்தா, ஆப் வெர்ஷனும் என்ன மாதிரி எரர்னும் மட்டும் Hushmile சர்வருக்குப் போகும். பேர், இடம், பயண கோட், போனோட அடையாள எண் அனுப்பாது; சர்வர் கடைசி 200 ரிப்போர்ட்டை மட்டும் வெச்சுக்கும்.</p>
       <p>Hushmile அவசர சேவை இல்லை. நீங்க டைப் பண்ண பேர் கோடோட காட்டப்படும். பயண ஸ்கிரீன்ல இருந்து ஷேரிங்கை முடிக்கலாம்.</p>
+      <p>கம்பெனி பயணியின் பெயர், ஃபோன், பிக்கப் இடம், டோல், பார்க்கிங், அல்லது குழு எண்ணிக்கைக்கான பெயர்களைச் சேர்த்தால், அவை அந்த புக்கிங்குடனே இருக்கும். பயணியின் ஃபோன் நம்பர் கம்பெனி டெஸ்க்குக்கும் அந்த ட்ரிப் டிரைவருக்கும் மட்டும் தெரியும்; குழுவின் லிங்கில் பெயர்கள் மட்டும் தெரியும்.</p>
   </details>
   <details lang="kn">
     <summary>ಕನ್ನಡ</summary>
@@ -160,6 +166,7 @@
       <p>ಧ್ವನಿ: ಜೋರಾಗಿ ಓದೋದು ನಿಮ್ಮ ಫೋನ್‌ನ ಸ್ವಂತ ಧ್ವನಿ ಬಳಸುತ್ತೆ, ಇಂಟರ್ನೆಟ್ ಇಲ್ಲದೆಯೂ ಕೆಲಸ ಮಾಡುತ್ತೆ. ಧ್ವನಿ ಕಮಾಂಡ್‌ಗಳು ಫೋನ್‌ನಲ್ಲೇ ಇರುವ ಸ್ಪೀಚ್ ರೆಕಗ್ನಿಷನ್ ಬಳಸುತ್ತವೆ. ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಆನ್‌ಲೈನ್ ಸ್ಪೀಚ್ ನೀವು ಅನುಮತಿಸಿ, ಫೋನ್‌ಗೆ ನಿಮ್ಮ ಭಾಷೆ ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿ ಆಗದಿದ್ದರೆ ಮಾತ್ರ, ಕಮಾಂಡ್‌ನ ಧ್ವನಿ ಪದಗಳಾಗಿ ಬದಲಾಗೋಕೆ ನಿಮ್ಮ ಫೋನ್‌ನ ಸ್ಪೀಚ್ ಸರ್ವೀಸ್‌ಗೆ (ಸಾಮಾನ್ಯವಾಗಿ Google) ಹೋಗುತ್ತೆ. ನೀವು ಹೇಳಿದ್ದನ್ನು Hushmile ಯಾವತ್ತೂ ರೆಕಾರ್ಡ್ ಮಾಡಲ್ಲ, ಇಟ್ಟುಕೊಳ್ಳಲ್ಲ, ಅದರ ಜೊತೆ ನಿಮ್ಮ ಲೊಕೇಶನ್ ಅಥವಾ ಪ್ರಯಾಣ ಕೋಡ್ ಕಳಿಸಲ್ಲ.</p>
       <p>ಎರರ್ ರಿಪೋರ್ಟ್: ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ‘ಎರರ್ ರಿಪೋರ್ಟ್ ಕಳಿಸಿ’ ನೀವು ಆನ್ ಮಾಡಿದ್ರೆ ಮಾತ್ರ. ಆಗ ಆ್ಯಪ್‌ನಲ್ಲಿ ಎರರ್ ಬಂದ್ರೆ, ಆ್ಯಪ್ ವರ್ಷನ್ ಮತ್ತು ಎಂಥಾ ಎರರ್ ಅನ್ನೋದು ಮಾತ್ರ Hushmile ಸರ್ವರ್‌ಗೆ ಹೋಗುತ್ತೆ. ಹೆಸರು, ಜಾಗ, ಪ್ರಯಾಣ ಕೋಡ್, ಫೋನ್ ಗುರುತು ಕಳಿಸಲ್ಲ; ಸರ್ವರ್ ಕೊನೆಯ 200 ರಿಪೋರ್ಟ್ ಮಾತ್ರ ಇಟ್ಟುಕೊಳ್ಳುತ್ತೆ.</p>
       <p>Hushmile ತುರ್ತು ಸೇವೆ ಅಲ್ಲ. ನೀವು ಟೈಪ್ ಮಾಡಿದ ಹೆಸರು ಕೋಡ್ ಜೊತೆ ಕಾಣುತ್ತೆ. ಪ್ರಯಾಣ ಸ್ಕ್ರೀನ್‌ನಿಂದ ಶೇರಿಂಗ್ ಮುಗಿಸಬಹುದು.</p>
+      <p>ಕಂಪನಿ ಪ್ರಯಾಣಿಕರ ಹೆಸರು, ಫೋನ್, ಪಿಕಪ್ ಜಾಗ, ಟೋಲ್, ಪಾರ್ಕಿಂಗ್ ಅಥವಾ ಗುಂಪಿನ ಎಣಿಕೆಗೆ ಹೆಸರುಗಳನ್ನು ಸೇರಿಸಿದರೆ, ಅವು ಆ ಬುಕಿಂಗ್ ಜೊತೆಯೇ ಇರುತ್ತವೆ. ಪ್ರಯಾಣಿಕರ ಫೋನ್ ನಂಬರ್ ಕಂಪನಿ ಡೆಸ್ಕ್‌ಗೆ ಮತ್ತು ಆ ಟ್ರಿಪ್ ಡ್ರೈವರ್‌ಗೆ ಮಾತ್ರ ಕಾಣುತ್ತೆ; ಗುಂಪಿನ ಲಿಂಕ್‌ನಲ್ಲಿ ಹೆಸರುಗಳು ಮಾತ್ರ ಕಾಣುತ್ತವೆ.</p>
   </details>
   <details lang="te">
     <summary>తెలుగు</summary>
@@ -170,6 +177,7 @@
       <p>గొంతు, మాట: చదివి వినిపించడానికి మీ ఫోన్ సొంత గొంతు వాడుతుంది, ఇంటర్నెట్ లేకుండానే పనిచేస్తుంది. మాట ఆదేశాలు మీ ఫోన్‌లోని మాట గుర్తింపుతో ఫోన్‌లోనే అర్థమవుతాయి. మీరు సెట్టింగ్‌లలో ఆన్‌లైన్ మాట గుర్తింపుకి అనుమతి ఇచ్చి, మీ భాష ఫోన్‌కి ఆఫ్‌లైన్‌లో రాకపోతేనే, మీ మాట శబ్దం అక్షరాలుగా మారడానికి మీ ఫోన్ స్పీచ్ సర్వీస్‌కి (సాధారణంగా Google) వెళ్తుంది. మీరు అన్నది Hushmile రికార్డ్ చేయదు, ఎక్కడా ఉంచదు, దానితో మీ లొకేషన్ గానీ ప్రయాణ కోడ్ గానీ పంపదు.</p>
       <p>ఎర్రర్ రిపోర్ట్‌లు: సెట్టింగ్‌లలో ‘ఎర్రర్ రిపోర్ట్‌లు పంపండి’ మీరు ఆన్ చేస్తేనే. అప్పుడు యాప్‌లో ఎర్రర్ వస్తే, యాప్ వెర్షన్, ఎర్రర్ ఏ రకమో మాత్రమే Hushmile సర్వర్‌కి వెళ్తాయి. పేరు, చోటు, జర్నీ కోడ్, ఫోన్ గుర్తింపు నంబర్ పంపదు; సర్వర్ చివరి 200 రిపోర్ట్‌లను మాత్రమే ఉంచుతుంది.</p>
       <p>Hushmile అత్యవసర సేవ కాదు. మీరు టైప్ చేసిన పేరు కోడ్‌తో పాటు కనిపిస్తుంది. ప్రయాణ స్క్రీన్ నుంచే షేరింగ్ ఆపవచ్చు.</p>
+      <p>కంపెనీ ప్యాసింజర్ పేరు, ఫోన్, పికప్ పాయింట్, టోల్, పార్కింగ్ లేదా గ్రూప్ హెడ్‌కౌంట్ కోసం పేర్లు జోడిస్తే, అవి ఆ బుకింగ్‌తోనే ఉంటాయి. ప్యాసింజర్ ఫోన్ నంబర్ కంపెనీ డెస్క్‌కి, ఆ ట్రిప్ డ్రైవర్‌కి మాత్రమే కనిపిస్తుంది; గ్రూప్ లింక్‌లో పేర్లు మాత్రమే కనిపిస్తాయి.</p>
   </details>
   <details lang="hi">
     <summary>हिन्दी</summary>
@@ -180,6 +188,7 @@
       <p>आवाज़: पढ़कर सुनाने के लिए आपके फ़ोन की अपनी आवाज़ इस्तेमाल होती है, और यह बिना इंटरनेट के चलता है। आवाज़ से काम आपके फ़ोन की आवाज़ पहचान से फ़ोन पर ही समझे जाते हैं। सिर्फ़ तब, जब आप सेटिंग्स में ऑनलाइन आवाज़ पहचान की इजाज़त दें और फ़ोन आपकी भाषा ऑफ़लाइन न समझ पाए, आपकी बात की आवाज़ शब्दों में बदलने के लिए आपके फ़ोन की स्पीच सर्विस (आमतौर पर Google) को जाती है। Hushmile आपकी बात न रिकॉर्ड करता है, न रखता है, और उसके साथ आपकी लोकेशन या जर्नी कोड कभी नहीं भेजता।</p>
       <p>एरर रिपोर्ट: सिर्फ़ तब, जब आप सेटिंग्स में ‘एरर रिपोर्ट भेजें’ चालू करें। तब ऐप में एरर आने पर Hushmile सर्वर को सिर्फ़ ऐप का वर्ज़न और एरर किस तरह का है, यह जाता है। नाम, जगह, जर्नी कोड या फ़ोन की पहचान नहीं जाते; सर्वर सिर्फ़ आख़िरी 200 रिपोर्ट रखता है।</p>
       <p>Hushmile इमरजेंसी सेवा नहीं है। आपका लिखा नाम कोड के साथ दिखता है। सफ़र वाली स्क्रीन से शेयरिंग बंद कर सकते हैं।</p>
+      <p>अगर कंपनी सवारी का नाम और फ़ोन, पिकअप पॉइंट, टोल और पार्किंग, या ग्रुप की गिनती के लिए नाम जोड़ती है, तो वे उसी बुकिंग के साथ रहते हैं। सवारी का फ़ोन नंबर सिर्फ़ कंपनी के डेस्क और उस ट्रिप के ड्राइवर को दिखता है; ग्रुप के लिंक पर सिर्फ़ नाम दिखते हैं।</p>
   </details>
 
   <h2>Contact</h2>
