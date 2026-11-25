@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="./vendor/leaflet.css">
   <title>Hushmile · How is the journey going?</title>
   <style>
-    :root { --bg:#fff; --card:#f6f7f9; --fg:#16181d; --muted:#4f5663; --line:#e2e5ea; --calm:#1b7f4e; --checkin:#a15c00; --help:#b42318; --quiet:#4f5663; --blue:#2d69fc; --link:#2d69fc; }
+    :root { --bg:#fff; --card:#f6f7f9; --fg:#16181d; --muted:#4f5663; --line:#e2e5ea; --calm:#166c42; --checkin:#8a4f00; --help:#b42318; --quiet:#4f5663; --blue:#2d69fc; --link:#2d69fc; }
     @media (prefers-color-scheme: dark) { :root { --bg:#061018; --card:#10192a; --fg:#f7f9fc; --muted:#b7c3d4; --line:#2a3a52; --calm:#4cc38a; --checkin:#f5b547; --help:#ff7a70; --quiet:#b7c3d4; --link:#8ab0ff; } }
     a { color: var(--link); }
     * { box-sizing: border-box; }
@@ -22,6 +22,9 @@
     h1 { font-size: 20px; margin: 0; }
     .hero { border-radius: 24px; padding: 18px; border: 1.5px solid var(--tone); background: color-mix(in srgb, var(--tone) 8%, var(--bg)); }
     .band { color: var(--tone); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: 14px; }
+    .hero.waiting { background: var(--card); border-color: var(--line); }
+    .body { color: var(--muted); font-size: 17px; font-weight: 400; margin: -4px 0 4px; line-height: 1.45; }
+    .enter { font-size: 22px; font-weight: 700; margin: 8px 0 0; line-height: 1.3; }
     .sentence { font-size: 22px; font-weight: 700; margin: 8px 0 12px; line-height: 1.35; overflow-wrap: anywhere; }
     .facts { display:flex; flex-wrap:wrap; gap: 8px 18px; font-weight: 600; }
     .roads { margin-top: 10px; font-size: 1.05rem; line-height: 1.4; } .roads div + div { margin-top: 4px; }
@@ -40,7 +43,12 @@
     .leaflet-tooltip { font: 600 14px/1.3 system-ui, sans-serif; }
     .sos { border-radius: 20px; padding: 16px; margin-bottom: 12px; background: #b42318; color: #fff; }
     .sos h2 { margin: 0 0 6px; font-size: 1.3rem; } .sos p { margin: 4px 0; line-height: 1.4; }
-    .sos .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .sos .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .sos .lead { font-size: 1.15rem; font-weight: 700; }
+    .sos .coords { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; padding: 6px 6px 6px 12px; border-radius: 12px; background: rgba(0,0,0,.18); font-size: .9rem; }
+    .sos .coords button { min-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid #fff; background: transparent; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    .sos .call a { display: block; text-align: center; margin-top: 10px; }
+    .sos .links a { flex: 1 1 0; text-align: center; background: transparent; color: #fff; border: 1px solid #fff; }
     .sos a { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 16px; border-radius: 22px; background: #fff; color: #8e1b24; font-weight: 700; text-decoration: none; }
     .drop { border-radius: 20px; padding: 14px; margin-top: 12px; background: var(--card); border: 2px solid #2d69fc; text-align: center; }
     .drop h2 { margin: 0 0 6px; font-size: 1.1rem; } .drop p { margin: 6px 0 0; line-height: 1.4; color: var(--muted); }
@@ -55,10 +63,12 @@
 <body>
   <main>
     <header><div class="mark" aria-hidden="true">H</div><h1>Hushmile</h1><label class="lang"><span id="lang-label">Language</span><select id="lang"></select></label></header>
-    <section id="sos" class="sos" role="alert" hidden><h2 id="sos-title"></h2><p id="sos-body"></p><p id="sos-sub"></p><div id="sos-links" class="links"></div></section>
-    <section id="status" class="hero" style="--tone: var(--quiet)" aria-live="polite">
+    <section id="sos" class="sos" role="alert" hidden><h2 id="sos-title"></h2><p id="sos-lead" class="lead"></p><p id="sos-body"></p><div id="sos-coords" class="coords" hidden><span id="sos-pin"></span><button type="button" id="sos-copy"></button></div><div id="sos-call" class="call"></div><div id="sos-links" class="links"></div><p id="sos-sub"></p></section>
+    <h2 class="enter" id="enter">Enter the Journey Code you were sent.</h2>
+    <section id="status" class="hero" style="--tone: var(--quiet)" aria-live="polite" hidden>
       <div class="band" id="band">Journey</div>
-      <div class="sentence" id="sentence">Enter the Journey Code you were sent.</div>
+      <div class="sentence" id="sentence"></div>
+      <p class="body" id="body" hidden></p>
       <div class="facts"><span id="last"></span><span id="left"></span><span id="speed"></span><span id="battery"></span></div>
       <div id="roads" class="roads" hidden></div>
       <div id="not-from-phone" class="small" hidden></div>

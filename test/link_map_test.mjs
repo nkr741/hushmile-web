@@ -120,7 +120,8 @@ test("format 3 only: a code-only page waits and tells the phone, then opens once
   // Nothing on the old channel, and no box yet: do not say the code is dead.
   const first = await load(CODE3, fetcher, now);
   assert.equal(first.waiting, true);
-  assert.match(first.sentence, /Leave this page open/);
+  assert.equal(first.sentence, "Waiting for the first update");
+  assert.match(first.body, /^Keep this page open\. It usually appears within a minute after they start\./);
   assert.equal(posted.length, 1);
   assert.equal(posted[0].topic, await topicFor(CODE3, "seen"));
   const seen = JSON.parse(await openFor(CODE3, "seen", posted[0].body));
@@ -144,7 +145,8 @@ test("a keyed link with no journey yet waits and does not say the code is not op
   setLanguage("en");
   const first = await load(CODE4, fetcher, now, KEY);
   assert.equal(first.waiting, true);
-  assert.match(first.sentence, /Leave this page open/);
+  assert.equal(first.sentence, "Waiting for the first update");
+  assert.match(first.body, /^Keep this page open\. It usually appears within a minute after they start\./);
   assert.equal(posted.length, 0, "a keyed link must not send seen");
   assert.ok(!asked.some((u) => u.startsWith(KEY_API)), "a keyed link does not ask the server for a key");
 });

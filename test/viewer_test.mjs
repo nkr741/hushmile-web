@@ -33,20 +33,26 @@ test("waiting shows no fake progress", () => {
   const s = viewState({ trip, spot: null, now });
   assert.equal(s.title, "Waiting for a location");
   assert.equal(s.lastUpdate, null);
+  // UX-03: grey and neutral, never "On time".
+  assert.equal(s.tone, "quiet");
+  assert.equal(s.waiting, true);
+  assert.equal(s.sentence, "Waiting for the first update");
+  assert.equal(s.body, "Usually within a minute after the journey starts.");
+  assert.doesNotMatch(s.sentence, /On time/);
 });
 
 test("on track sentence and km left", () => {
   const s = viewState({ trip, spot: { km: 60, updatedAt: now - 60000, movedAt: now - 60000 }, now });
   assert.equal(s.title, "On track");
   assert.equal(s.kmLeft, 60);
-  assert.match(s.sentence, /^On time\. About 60 minutes to go\.$/);
+  assert.match(s.sentence, /^On time\. About 1 h to go\.$/);
 });
 
 test("a longer traffic estimate at the start is not well behind", () => {
   const fresh = { name: "Raju", to: "Vijayawada", start: now - 2 * 60000, totalKm: 264, speedKmh: 60 };
   const s = viewState({ trip: fresh, spot: { km: 1, updatedAt: now, movedAt: now, roadMin: 310, place: "Nacharam" }, now });
   assert.equal(s.title, "On track");
-  assert.match(s.sentence, /310/);
+  assert.match(s.sentence, /About 5 h 10 min to go/);
   assert.doesNotMatch(s.sentence, /well behind/);
 });
 
@@ -144,7 +150,21 @@ test("load() reads sealed messages from a relay", async () => {
 });
 
 // ---- Languages, near-destination and battery (1.2.0) ----------------------
-import { nearMinutes, pickLanguage, setLanguage } from "../hushmile-viewer.js";
+import { durationText, nearMinutes, pickLanguage, setLanguage } from "../hushmile-viewer.js";
+
+test("UX-04: one duration rule, the same as the app", () => {
+  setLanguage("en");
+  assert.equal(durationText(45), "45 min");
+  assert.equal(durationText(59), "59 min");
+  assert.equal(durationText(60), "1 h");
+  assert.equal(durationText(133), "2 h 13 min");
+  assert.equal(durationText(245), "4 h 5 min");
+  setLanguage("te");
+  assert.equal(durationText(133), "2 గం. 13 నిమి.");
+  setLanguage("hi");
+  assert.equal(durationText(133), "2 घंटे 13 मिनट");
+  setLanguage("en");
+});
 import { STRINGS } from "../i18n.js";
 
 test("every web string exists in Telugu and Hindi, translated", () => {

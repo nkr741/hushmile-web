@@ -773,6 +773,16 @@ export function clock(ms) {
 }
 
 /** Same as nearMinutes in lib/arrival.dart. */
+/** How long, written the same way as the app (lib/duration_text.dart, UX-04):
+ * under an hour in minutes ("45 min"), otherwise hours and minutes
+ * ("2 h 13 min", "2 h" on the hour). */
+export function durationText(minutes) {
+  const total = Math.max(0, Math.round(Number(minutes) || 0));
+  const h = Math.floor(total / 60), m = total % 60;
+  if (h === 0) return t.minShort({ m });
+  return m === 0 ? t.durH({ h }) : t.hMin({ h, m });
+}
+
 export function nearMinutes(distanceM, roadMin) {
   if (typeof roadMin === "number" && roadMin >= 0) return Math.max(1, Math.round(roadMin));
   return Math.max(1, Math.round((distanceM / 1000 / 25) * 60));
@@ -833,17 +843,26 @@ export function sosBanner(spot, trip, now = Date.now()) {
   const ok = typeof spot.lat === "number" && typeof spot.lng === "number";
   const pin = ok ? pinText(spot.lat, spot.lng) : null;
   const place = typeof spot.place === "string" && spot.place.trim() ? spot.place.trim() : null;
-  const where = pin == null ? place : place == null ? pin : `${place} (${pin})`;
   const fix = typeof spot.fixAt === "number" ? spot.fixAt : typeof spot.updatedAt === "number" ? spot.updatedAt : null;
-  const age = fix == null ? null : now - fix < 60000 ? t.fixAgeNow() : t.fixAgeMin({ n: Math.floor((now - fix) / 60000) });
   const phone = typeof spot.phone === "string" && spot.phone.trim() ? spot.phone.trim() : null;
+  const sos = (SAFETY.countries.in.dial || []).find((n) => n.id === "emergency");
+  // UX-05: lead with the place and how old it is; the exact coordinates sit
+  // on their own line with Copy. One "call them now", then Call first, then
+  // Open map and the emergency number.
+  const ago = fix == null ? null : now - fix < 60000 ? t.speedJustNow() : t.minAgo({ n: Math.floor((now - fix) / 60000) });
+  const lead = ago == null ? null : place ? t.sosNearPlace({ place, age: ago }) : pin ? t.sosLastAt({ age: ago }) : null;
   return {
     title: t.sosPressed({ name }),
-    body: where == null || age == null ? t.sosNoLocation() : t.sosBody({ where, age }),
+    lead,
+    body: pin == null && place == null ? t.sosNoLocation() : t.sosCallNow(),
+    coords: pin,
+    copy: t.copy(),
+    copied: t.sosCopied(),
     sub: t.sosBannerSub({ name }),
     call: phone ? { label: t.callName({ name }), href: dialUrl(phone) } : null,
     noPhone: phone ? null : t.noPhoneShared({ name }),
     map: ok ? { label: t.openMap(), href: mapPinUrl(spot.lat, spot.lng) } : null,
+    dial: sos ? { label: t.callNumber({ number: sos.number }), href: dialUrl(sos.number) } : null,
   };
 }
 
@@ -1078,7 +1097,8 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
       const end = spot ? endSentence(spot, trip, name, to) : { arrived: false, sentence: t.webEnded() };
       return { title: end.arrived ? "Arrived safely" : "Tracking stopped", tone: end.arrived ? "calm" : "quiet", sentence: end.sentence, lastUpdate: null, kmLeft: null, battery: null, charging: false, speed: null };
     }
-    return { title: "Waiting for a location", tone: "quiet", sentence: t.jsWaiting(), lastUpdate: null, kmLeft: trip ? trip.totalKm : null, battery: null, charging: false };
+    // UX-03: a grey waiting card until the first update arrives.
+    return { title: "Waiting for a location", tone: "quiet", sentence: t.stWaiting(), body: t.waitingFirstBody(), waiting: true, lastUpdate: null, kmLeft: trip ? trip.totalKm : null, battery: null, charging: false };
   }
   const at = typeof spot.updatedAt === "number" ? spot.updatedAt : null;
   const total = trip ? trip.totalKm : spot.km;
@@ -1139,10 +1159,10 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   if (late > 8) {
     const why = delayReason({ stillMin, stopsMin: Number(spot.stopsMin) || 0, paceKmh: typeof spot.paceKmh === "number" ? Math.round(spot.paceKmh) : null, plannedKmh: speed, driverSaid: said, why: typeof spot.why === "string" ? spot.why : null, whyPlace: typeof spot.whyPlace === "string" ? spot.whyPlace : "", offKm: typeof spot.offKm === "number" ? spot.offKm : 0, stopPlace: place || "", stopKind: typeof spot.stopKind === "string" ? spot.stopKind : null }) || (said ? `${checkinLabel(said)}.` : t.jsNoReason());
     if (late > 25) return out("At risk", "checkin", `${lead}${t.jsRiskReason({ past: t.jsRiskPast({ n: late }), reason: why, where: place || clock(at) })}`, true);
-    return out("Delayed", "calm", `${lead}${t.jsLate({ late, why, rest: minutes ? t.jsMinRest({ m: minutes }) : "" })}`, true);
+    return out("Delayed", "calm", `${lead}${t.jsLate({ late, why, rest: minutes ? t.jsMinRest({ time: durationText(minutes) }) : "" })}`, true);
   }
   if (said) return out("On track", "calm", `${lead}${t.jsBecause({ because: checkinLabel(said) })}`, true);
-  return out("On track", "calm", `${lead}${minutes ? t.jsOnScheduleMin({ m: minutes }) : t.jsOnSchedule()}`, true);
+  return out("On track", "calm", `${lead}${minutes ? t.jsOnScheduleMin({ time: durationText(minutes) }) : t.jsOnSchedule()}`, true);
 }
 
 // ---- Page ------------------------------------------------------------------
@@ -1231,7 +1251,8 @@ export async function load(code, fetcher = globalThis.fetch, now = Date.now(), l
     // Nothing to read yet. A key in the link does not mean the journey is
     // dead: it may not have started. Leave the page open. Do not send
     // "seen" when the link already has the key.
-    return { title: "Waiting", tone: "quiet", sentence: t.codeWaiting(), lastUpdate: null, kmLeft: null, battery: null, charging: false, speed: null, roads: [], waiting: true, map: null, linkKey: key || null };
+    // UX-31: a heading, then the advice in normal text.
+    return { title: "Waiting", tone: "quiet", sentence: t.stWaiting(), body: t.webWaitingBody(), lastUpdate: null, kmLeft: null, battery: null, charging: false, speed: null, roads: [], waiting: true, map: null, linkKey: key || null };
   }
   let state = viewState({ trip, spot, dead, now, closedTrip });
   // Only a quiet phone needs the weak-signal hint, so only then ask for it.
