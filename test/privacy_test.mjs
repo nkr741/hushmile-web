@@ -36,13 +36,16 @@ test("the travel desk is not offered for school buses", () => {
   assert.match(page, /aged 18 and over/);
 });
 
-test("company-trip live facts (app 1.8.2) are disclosed in every language", () => {
+test("company-trip live facts and fuel fills (app 1.0.0) are disclosed in every language", () => {
   assert.match(page, /<span id="desk-live">/);
   assert.match(page, /speed, average moving speed and distance driven/);
   assert.match(page, /not an emergency service/);
   assert.doesNotMatch(page, /It does not store the Journey Code or any location/);
+  assert.match(page, /note a fuel fill on the trip/);
+  assert.match(page, /no bill photo is taken or stored/);
+  assert.match(page, /Fuel fills on a company trip/);
   for (const lang of ["ta", "kn", "te", "hi"]) {
     const block = page.split(`<details lang="${lang}">`)[1].split("</details>")[0];
-    assert.match(block, /1\.8\.2/, lang);
+    assert.match(block, /1\.0\.0/, lang);
   }
 });
