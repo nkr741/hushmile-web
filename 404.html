@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <title>Hushmile</title>
+  <script>
+    (function () {
+      var path = location.pathname;
+      if (path === "/hushmile-web" || path.indexOf("/hushmile-web/") === 0) {
+        var rest = path.replace(/^\/hushmile-web\/?/, "/") || "/";
+        location.replace(rest + location.search + location.hash);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <p>This page was not found. <a href="./">Open Hushmile</a></p>
+</body>
+</html>

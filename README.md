@@ -2,9 +2,11 @@
 
 A static page that shows a Hushmile road trip to family without the app.
 
-Open `https://nkr741.github.io/hushmile-web/#ABCD-EFGH.KEY` (app 1.4.1+:
+Open `https://watch.hushmile.com/#ABCD-EFGH.KEY` (app 1.4.1+:
 the Journey Code and the journey's link key) or the older
-`https://nkr741.github.io/hushmile-web/#ABCD-EFGH` (the code only). A
+`https://watch.hushmile.com/#ABCD-EFGH` (the code only). Older shared
+links at `https://nkr741.github.io/hushmile-web/#…` continue to work.
+A
 code-only page posts an encrypted "seen" on the old channel, so the
 traveller's phone writes the old channel for it and escrows the link key on
 api.hushmile.com, wrapped with scrypt(code, per-journey salt) and never
@@ -27,6 +29,8 @@ tile.openstreetmap.org (the map). Leaflet 1.9.4 is vendored in `vendor/`
 
 Map: blue line = the planned route, grey dots = earlier places (the trail),
 marker = the last known place with its age. Nothing on the map is live.
+
+The site is served at https://watch.hushmile.com/ (GitHub Pages, `CNAME` file). A `hushmile-web/` folder and `404.html` keep older `/hushmile-web/…` paths working if a redirect leaves that prefix in place.
 
 Tests: `node --test test/`
 
