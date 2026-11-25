@@ -9,7 +9,11 @@ test("account deletion has its own anchor with the in-app routes and an email ro
   assert.match(page, /<h2 id="delete-account">/);
   assert.match(page, /Delete this company account/);
   assert.match(page, /Leave this desk/);
-  assert.match(page, /mailto:ryvantechnologies@gmail\.com\?subject=Delete/);
+  assert.match(page, /mailto:support@hushmile\.com\?subject=Delete/);
+  assert.match(page, /Questions or data requests: email <a href="mailto:support@hushmile\.com">/);
+  // One support address: no other email on the page.
+  const emails = new Set(page.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g));
+  assert.deepEqual([...emails], ["support@hushmile.com"]);
 });
 
 test("error reports are described as opt-in and no longer denied", () => {
