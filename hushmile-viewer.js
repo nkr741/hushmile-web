@@ -134,16 +134,66 @@ export function linkKeyFromText(text) {
   }
 }
 
-/** "#ABCD-EFGH", "#ABCD-EFGH.KEY", a pasted link or a typed code: {code, key}. */
+/**
+ * "#ABCD-EFGH", "#ABCD-EFGH.KEY", a pasted link or a typed code: {code, key}.
+ * A travel desk passenger link may also carry a drop-off code key
+ * ("#ABCD-EFGH.d<32 hex>", app 1.1.1): then {code, key, drop}. An older page
+ * reads only the code before the first dot, so such a link still opens.
+ */
 export function readInput(raw) {
   let text = String(raw || "").trim();
   try { text = decodeURIComponent(text); } catch {}
   const hash = text.lastIndexOf("#");
   if (hash >= 0) text = text.slice(hash + 1);
-  const dot = text.indexOf(".");
-  const code = shownCode(dot >= 0 ? text.slice(0, dot) : text);
-  const key = dot >= 0 ? linkKeyFromText(text.slice(dot + 1)) : null;
-  return { code, key };
+  const parts = text.split(".");
+  // The passenger's drop-off page (WhatsApp drop_code): "#d<key>", no journey.
+  const only = /^d([0-9a-f]{32})$/i.exec(parts[0].trim());
+  if (only && parts.length === 1) return { code: "", key: null, drop: only[1].toLowerCase() };
+  const code = shownCode(parts[0]);
+  let key = null;
+  let drop = null;
+  for (const part of parts.slice(1)) {
+    const d = /^d([0-9a-f]{32})$/i.exec(part.trim());
+    if (d) drop = d[1].toLowerCase();
+    else key ??= linkKeyFromText(part);
+  }
+  return drop ? { code, key, drop } : { code, key };
+}
+
+// ---- Drop-off code (travel desk passengers, API 1.5.17) ---------------------
+// The passenger's own random key from the link, in a POST body (never a URL).
+// The server answers with the 4-digit code while the trip is open, "verified"
+// once the driver typed it, or "closed".
+export const DROP_API = `${PRIMARY_RELAY}/v1/drop/view`;
+export const DROP_EVERY_MS = 5 * 60000;
+
+export async function readDrop(key, fetchFn = globalThis.fetch) {
+  if (!/^[0-9a-f]{32}$/.test(String(key || ""))) return null;
+  try {
+    const res = await fetchFn(DROP_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const state = body && body.state;
+    if (state === "open" && /^\d{4}$/.test(String(body.code || ""))) return { state, code: String(body.code) };
+    if (state === "verified" && typeof body.at === "number") return { state, at: body.at };
+    if (state === "closed") return { state };
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** What the drop-off card says for a readDrop answer; null hides it. */
+export function dropCard(drop) {
+  if (!drop) return null;
+  if (drop.state === "open") return { title: t.webDropTitle(), code: drop.code, body: t.webDropBody() };
+  if (drop.state === "verified") return { title: t.webDropTitle(), code: "", body: t.webDropChecked({ time: clock(drop.at) }) };
+  return { title: t.webDropTitle(), code: "", body: t.webDropClosed() };
+}
+
+/** Keep polling the code only while it can still change. */
+export function dropDone(drop) {
+  return !!drop && (drop.state === "verified" || drop.state === "closed");
 }
 
 export const KEY_API = `${PRIMARY_RELAY}/v1/key`;
@@ -500,8 +550,13 @@ async function latestOn(code, kind, since, fetcher, relays, link) {
   const topic = await topicFor(code, kind, link);
   const awake = relays.filter((relay) => !relayResting(relay));
   const answers = await Promise.allSettled((awake.length ? awake : relays).map((relay) => readRelay(relay, topic, code, kind, since, fetcher, link)));
-  const ok = answers.filter((a) => a.status === "fulfilled").map((a) => a.value);
-  if (!ok.length) throw answers[0].reason || new Error("relay");
+  const read = answers.filter((a) => a.status === "fulfilled").map((a) => a.value);
+  if (!read.length) throw answers[0].reason || new Error("relay");
+  // Relays answer in any order. Every relay time is noted first, and only then
+  // is anything ranked, so a copy re-posted on one relay never borrows a
+  // newer time just because that relay answered first.
+  for (const r of read) for (const item of r.items) firstRelayTime(topic, item.plain, item.time);
+  const ok = read.map((r) => rankRelay(topic, kind, r));
   // Decide after every relay answered: one may hold the proof the other lacks.
   const trusted = link ? trustedPubs.get(bareCode(code)) : null;
   let best = null;
@@ -531,10 +586,8 @@ async function readRelay(relay, topic, code, kind, since, fetcher, link) {
   if (!res.ok) throw new Error(`relay ${res.status}`);
   resting.delete(relay);
   const text = await res.text();
-  // The newest unsigned message, and the newest per signing key.
-  let unsigned = kept ? kept.unsigned : null;
-  const byPub = new Map(kept ? kept.byPub : []);
-  let order = kept ? kept.order : 0;
+  // Every readable message here; rankRelay picks the newest once all relays answered.
+  const items = [];
   let lastId = null;
   let allIds = true;
   const bare = bareCode(code);
@@ -559,12 +612,30 @@ async function readRelay(relay, topic, code, kind, since, fetcher, link) {
       // This browser cannot check a signature (no Ed25519 at all): as before.
       body = check.clean;
     }
-    const time = firstRelayTime(topic, plain, event.time);
+    items.push({ time: event.time, body, plain, pub: check.state === "valid" ? check.pub : null });
+  }
+  return { key, kept, kind, items, lastId, allIds };
+}
+
+// The newest unsigned message and the newest per signing key, by first relay
+// time (synchronous: all relays' times are already known).
+function rankRelay(topic, kind, { key, kept, items, lastId, allIds }) {
+  const retime = (item) => {
+    if (!item) return item;
+    const time = firstRelayTime(topic, item.plain, item.at[0] > 0 ? item.at[0] : undefined);
+    if (item.body && typeof item.body === "object" && time > 0) item.body.relayAt = time * 1000;
+    return { ...item, at: [time, item.at[1]] };
+  };
+  let unsigned = retime(kept ? kept.unsigned : null);
+  const byPub = new Map(kept ? [...kept.byPub].map(([pub, item]) => [pub, retime(item)]) : []);
+  let order = kept ? kept.order : 0;
+  for (const { time: relayTime, body, plain, pub } of items) {
+    const time = firstRelayTime(topic, plain, relayTime);
     const at = [time, order++];
     if (body && typeof body === "object" && time > 0) body.relayAt = time * 1000;
     const item = { at, body, plain };
-    if (check.state === "valid") {
-      if (newer(item, byPub.get(check.pub))) byPub.set(check.pub, item);
+    if (pub) {
+      if (newer(item, byPub.get(pub))) byPub.set(pub, item);
     } else if (newer(item, unsigned)) unsigned = item;
   }
   if (kind !== "dead" && allIds && (lastId || kept)) reads.set(key, { lastId: lastId || kept.lastId, unsigned, byPub, order });

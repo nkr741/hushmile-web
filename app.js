@@ -1,6 +1,6 @@
 import { createMap } from "./map-view.js";
 import { mapConfig } from "./map-config.js";
-import { bareCode, clock, language, LANGUAGES, linkKeyText, load, mapAgeLine, pickLanguage, readInput, setLanguage, t, oneAtATime, WAKE_DELAY_MS, wakeTopics, wakeUrl } from "./hushmile-viewer.js";
+import { bareCode, clock, DROP_EVERY_MS, dropCard, dropDone, language, LANGUAGES, linkKeyText, load, mapAgeLine, pickLanguage, readDrop, readInput, setLanguage, t, oneAtATime, WAKE_DELAY_MS, wakeTopics, wakeUrl } from "./hushmile-viewer.js";
 import { LANGUAGE_INFO } from "./i18n.js";
 
 const bands = { calm: "toneCalm", checkin: "toneCheckin", help: "toneHelp", quiet: "toneQuiet" };
@@ -205,8 +205,56 @@ async function readOnce(code) {
   }
 }
 
+// The travel desk passenger's drop-off code (app 1.1.1): read with the key
+// from the link every few minutes until the driver has checked it.
+let dropKey = null;
+let dropTimer = null;
+let lastDrop = null;
+function paintDrop() {
+  const card = dropCard(lastDrop);
+  $("drop").hidden = !card;
+  if (!card) return;
+  $("drop-title").textContent = card.title;
+  $("drop-code").textContent = card.code;
+  $("drop-code").hidden = !card.code;
+  $("drop-body").textContent = card.body;
+}
+async function refreshDrop() {
+  if (!dropKey) return;
+  const got = await readDrop(dropKey);
+  if (got) lastDrop = got;
+  paintDrop();
+  if (dropDone(lastDrop)) clearInterval(dropTimer);
+}
+function startDrop(key) {
+  clearInterval(dropTimer);
+  dropKey = key || null;
+  lastDrop = null;
+  paintDrop();
+  if (!dropKey) return;
+  refreshDrop();
+  dropTimer = setInterval(() => {
+    if (!document.hidden) refreshDrop();
+  }, DROP_EVERY_MS);
+}
+
+// The passenger's drop-off page (#d<key>, from the drop_code WhatsApp
+// message): only the code card, no journey to open or poll.
+function startDropOnly(drop) {
+  clearInterval(timer);
+  for (const s of streams) s.close();
+  streams = [];
+  streamFor = "";
+  current = null;
+  currentKey = null;
+  if (drop !== dropKey) startDrop(drop);
+  if (location.hash.slice(1) !== `d${drop}`) history.replaceState(null, "", `#d${drop}`);
+  $("sentence").textContent = t.webDropOnly();
+}
+
 function start(input) {
-  const { code: shown, key } = readInput(input);
+  const { code: shown, key, drop } = readInput(input);
+  if (!shown && drop) return startDropOnly(drop);
   if (bareCode(shown).length !== 8) return;
   if (shown !== current) {
     mapView?.reset();
@@ -214,8 +262,9 @@ function start(input) {
   current = shown;
   currentKey = key;
   $("code").value = shown;
-  // Keep the link key in the address (old links have none; both work).
-  const hash = key ? `${shown}.${linkKeyText(key)}` : shown;
+  if (drop !== dropKey) startDrop(drop);
+  // Keep the link key (and a drop-off code key) in the address.
+  const hash = (key ? `${shown}.${linkKeyText(key)}` : shown) + (drop ? `.d${drop}` : "");
   if (location.hash.slice(1) !== hash) history.replaceState(null, "", `#${hash}`);
   $("sentence").textContent = t.openingJourney();
   clearInterval(timer);
@@ -275,7 +324,9 @@ $("lang").addEventListener("change", () => {
   } catch {}
   setLanguage(pickLanguage(choice === "system" ? null : choice, navigator.languages || [navigator.language]));
   paintPage();
+  paintDrop();
   if (current) refresh(current);
+  else if (dropKey && location.hash.slice(1) === `d${dropKey}`) $("sentence").textContent = t.webDropOnly();
   else if (!shownState) $("sentence").textContent = t.webEnter();
 });
 

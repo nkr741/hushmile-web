@@ -20,6 +20,7 @@ sentence, last update and kilometres left.
 - `index.html`, `app.js`: the page
 - `hushmile-viewer.js`: crypto, relay and sentence logic
 - `privacy.html`: privacy policy for the app and this page
+- Drop-off code (app 1.1.1, API 1.5.17): a travel desk passenger link may carry `.d<key>` after the code (`#ABCD-EFGH.d<32 hex>`), and the WhatsApp `drop_code` message opens `#d<key>` alone (only the code card, no journey). The key goes to api.hushmile.com only in a POST body (`/v1/drop/view`); the card shows the 4-digit code while the trip is open, then "checked" or "ended".
 - `tour.html`, `board.html`, `tour.js`: group headcount (app 1.1.0, API 1.5.14). The travel desk makes two links, `tour.html#TOUR.KEY` for the guide (add names, start a halt "leaves in N min", see who is not back, remind on WhatsApp) and `board.html#TOUR.KEY` for the group (tap your name, "I'm back on the bus"). The key stays after `#` and goes to api.hushmile.com only in a POST body. The page reads the list every 20 s while it is open. No accounts, no photos; the group's link never shows phone numbers. CSP: connections to api.hushmile.com only.
 
 No build step, no secrets, no server. The Content-Security-Policy only allows

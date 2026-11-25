@@ -131,3 +131,53 @@ test("a re-posted copy of an old signed update keeps its first time (no replay a
   assert.equal(got.place, "Nandigama");
   assert.equal(got.relayAt, 105000);
 });
+
+test("a re-posted copy keeps its first time whichever relay answers first", async () => {
+  // The cause of an old flake: both relays are read at once, and when ntfy.sh
+  // (holding the copy) answered first, the copy was ranked by its re-post time.
+  for (const slow of [PRIMARY_RELAY, FALLBACK_RELAY]) {
+    resetReads();
+    resetTrust();
+    const traveller = writer(crypto.randomBytes(32));
+    const link = await linkKeyForPub(traveller.pub);
+    const r = relays();
+    const old = traveller.sign("spot", { km: 12, place: "Suryapet" });
+    await r.add(PRIMARY_RELAY, old, link); // 101
+    await r.add(PRIMARY_RELAY, traveller.sign("spot", { km: 40, place: "Kodad" }), link); // 102
+    await r.add(FALLBACK_RELAY, old, link); // 103: the copy
+    let release;
+    const gate = new Promise((done) => { release = done; });
+    const fetcher = async (url) => {
+      const res = await r.fetcher(url);
+      if (url.startsWith(slow)) await gate;
+      else setTimeout(release, 20);
+      return res;
+    };
+    const got = await latest(CODE, "spot", "3h", fetcher, [PRIMARY_RELAY, FALLBACK_RELAY], link);
+    assert.equal(got.place, "Kodad", `slow relay ${slow}`);
+    assert.equal(got.relayAt, 102000);
+  }
+});
+
+test("a newer update only on ntfy.sh beats an old copy re-posted after it there", async () => {
+  resetReads();
+  resetTrust();
+  const traveller = writer(crypto.randomBytes(32));
+  const link = await linkKeyForPub(traveller.pub);
+  const r = relays();
+  const old = traveller.sign("spot", { km: 12, place: "Suryapet" });
+  await r.add(PRIMARY_RELAY, old, link); // 101
+  await r.add(FALLBACK_RELAY, traveller.sign("spot", { km: 40, place: "Kodad" }), link); // 102, our relay was down
+  await r.add(FALLBACK_RELAY, old, link); // 103: the copy
+  let release;
+  const gate = new Promise((done) => { release = done; });
+  const fetcher = async (url) => {
+    const res = await r.fetcher(url);
+    if (url.startsWith(PRIMARY_RELAY)) await gate;
+    else setTimeout(release, 20);
+    return res;
+  };
+  const got = await latest(CODE, "spot", "3h", fetcher, [PRIMARY_RELAY, FALLBACK_RELAY], link);
+  assert.equal(got.place, "Kodad");
+  assert.equal(got.relayAt, 102000);
+});
