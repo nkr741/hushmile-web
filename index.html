@@ -42,6 +42,9 @@
     .sos h2 { margin: 0 0 6px; font-size: 1.3rem; } .sos p { margin: 4px 0; line-height: 1.4; }
     .sos .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .sos a { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 16px; border-radius: 22px; background: #fff; color: #8e1b24; font-weight: 700; text-decoration: none; }
+    .drop { border-radius: 20px; padding: 14px; margin-top: 12px; background: var(--card); border: 2px solid #2d69fc; text-align: center; }
+    .drop h2 { margin: 0 0 6px; font-size: 1.1rem; } .drop p { margin: 6px 0 0; line-height: 1.4; color: var(--muted); }
+    .drop-code { font-size: 2.6rem; font-weight: 800; letter-spacing: .4em; padding-left: .4em; font-variant-numeric: tabular-nums; }
     .help { border-radius: 20px; padding: 14px; margin-top: 12px; background: var(--card); border: 1px solid var(--line); }
     .help h2 { margin: 0 0 8px; font-size: 1.1rem; } .help .links { display: flex; flex-wrap: wrap; gap: 8px; }
     .help a { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--line); color: var(--fg); text-decoration: none; }
@@ -60,6 +63,7 @@
       <div id="roads" class="roads" hidden></div>
       <div id="not-from-phone" class="small" hidden></div>
     </section>
+    <section id="drop" class="drop" aria-live="polite" hidden><h2 id="drop-title"></h2><div id="drop-code" class="drop-code"></div><p id="drop-body"></p></section>
     <section id="help" class="help" hidden><h2 id="help-title"></h2><div id="help-links" class="links"></div><div id="help-search" class="links" style="margin-top:8px"></div><div id="help-note" class="small"></div></section>
     <section id="map-box" class="map-box" hidden><div id="map" role="region" aria-label="Map of the journey"></div><div class="legend"><span id="legend-planned"><i style="background:#2d69fc"></i><span id="legend-planned-text"></span></span><span id="legend-driven" hidden><i style="background:#0e7c66"></i><span id="legend-driven-text"></span></span></div><div id="map-note" class="map-note"></div></section>
     <form id="form" autocomplete="off">
