@@ -772,6 +772,38 @@ export function clock(ms) {
   return `${h}:${String(d.getMinutes()).padStart(2, "0")} ${mark}`;
 }
 
+// ---- Arrival state (app 1.1.1+128, lib/arrival_state.dart) ----------------
+
+export const ARR_ON_WAY = "onway";
+export const ARR_ARRIVING = "arriving";
+export const ARR_AT_DEST = "atdest";
+export const ARR_ARRIVED = "arrived";
+
+/** The state an update carries, or null for an older phone. */
+export function sentArrival(spot) {
+  const v = spot && spot.arr;
+  return [ARR_ON_WAY, ARR_ARRIVING, ARR_AT_DEST, ARR_ARRIVED].includes(v) ? v : null;
+}
+
+/** "About N min" is never said under 3 minutes; null means "arriving now". */
+export function sayableMinutes(minutes) {
+  if (typeof minutes !== "number" || !Number.isFinite(minutes)) return null;
+  const n = Math.round(minutes);
+  return n < 3 ? null : n;
+}
+
+/** Same as staleLeftLine in lib/arrival_state.dart. */
+export function staleLeftLine(state, minutesLeft, at) {
+  if (at == null) return null;
+  const when = clock(at);
+  if (state === ARR_AT_DEST) return t.asOfAtDest({ at: when });
+  if (state === ARR_ARRIVED) return null;
+  const n = typeof minutesLeft === "number" ? sayableMinutes(minutesLeft) : null;
+  if (state === ARR_ARRIVING || (typeof minutesLeft === "number" && minutesLeft >= 0 && n == null)) return t.asOfArriving({ at: when });
+  if (n == null) return null;
+  return t.asOfMinToGo({ time: durationText(n), at: when });
+}
+
 /** Same as nearMinutes in lib/arrival.dart. */
 /** How long, written the same way as the app (lib/duration_text.dart, UX-04):
  * under an hour in minutes ("45 min"), otherwise hours and minutes
@@ -1121,7 +1153,13 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   if (spot.checkin === "help" || (spot.sos === true && spot.checkin !== "safe")) return out("Needs help", "help", place ? t.jsHelpAt({ name, place }) : t.jsHelp({ name }));
   if (spot.paused) return out("Sharing paused", "quiet", t.jsPaused({ name }));
   const stale = at != null && now - at >= staleAfter(Number(spot.every) || 0);
+  // App 1.1.1+128: the arrival state the phone sent (lib/arrival_state.dart);
+  // an update from an older phone has none and is read as before.
+  const arr = sentArrival(spot);
   if (stale) {
+    // How long was left when the last update was sent, with its time.
+    const asOf = staleLeftLine(arr, typeof spot.roadMin === "number" ? spot.roadMin : trip ? (kmLeft / (trip.speedKmh || 60)) * 60 : null, at);
+    const was = asOf ? ` ${asOf}` : "";
     // A gap where signal is usually weak reads as expected, not alarming.
     const weakGap = weakNear(weak, { lat: spot.lat, lng: spot.lng, points: trip && trip.points, km: spot.km });
     const expected = weakGap == null ? "" : ` ${t.weakHere({ n: weakGap })}`;
@@ -1131,17 +1169,20 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
       // deadPhoneLine already says it when the battery was 15% or less.
       const saidBattery = typeof battery === "number" && battery <= 15;
       const why = [batteryBand(spot) && !saidBattery ? ` ${t.quietLowBattery()}` : "", nightAt(at) ? ` ${t.nightSooner()}` : ""].join("");
-      return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery, kmLeft }) + why + expected);
+      return out("Signal gap", "quiet", deadPhoneLine({ lastAt: at, place, battery, kmLeft }) + why + was + expected);
     }
-    return out("Signal gap", "quiet", (place ? t.jsGapAt({ dead: "", place, at: clock(at) }) : t.jsGap({ dead: "", at: clock(at) })) + expected);
+    return out("Signal gap", "quiet", (place ? t.jsGapAt({ dead: "", place, at: clock(at) }) : t.jsGap({ dead: "", at: clock(at) })) + was + expected);
   }
   const back = catchUpLine(spot.back, at, place);
   const lead = back ? back + " " : "";
-  // The driver phone's geofence decides; an older app falls back to 3 km.
-  const near = typeof spot.near === "boolean" ? spot.near : kmLeft <= 3 && kmLeft > 0;
+  if (arr === ARR_AT_DEST) return out("At the destination", "calm", `${lead}${t.jsAtDest({ name, to })}`, true);
+  // The arrival state decides; then the driver phone's geofence; an older
+  // app falls back to 3 km.
+  const near = arr ? arr === ARR_ARRIVING : typeof spot.near === "boolean" ? spot.near : kmLeft <= 3 && kmLeft > 0;
   if (near) {
     const metres = typeof spot.nearM === "number" ? spot.nearM : kmLeft * 1000;
-    return out("Near the destination", "calm", `${lead}${t.jsAlmost({ n: nearMinutes(metres, spot.roadMin) })}`, true);
+    const n = sayableMinutes(nearMinutes(metres, spot.roadMin));
+    return out("Near the destination", "calm", `${lead}${n == null ? t.jsArrivingNow() : t.jsAlmost({ n })}`, true);
   }
   const stillMin = typeof spot.movedAt === "number" ? Math.max(0, Math.floor((now - spot.movedAt) / 60000)) : 0;
   const stopMin = [15, 30, 45].includes(spot.stopMin) ? spot.stopMin : 15;
@@ -1155,7 +1196,8 @@ export function viewState({ trip, spot, dead, now = Date.now(), closedTrip = fal
   const coveredMin = ((total - kmLeft) / speed) * 60;
   const elapsedMin = trip && trip.start ? (now - trip.start) / 60000 : 0;
   const late = Math.round(elapsedMin - coveredMin);
-  const minutes = moveMin >= 1 ? Math.round(moveMin) : null;
+  // "About N min" only from 3 minutes up.
+  const minutes = sayableMinutes(moveMin);
   if (late > 8) {
     const why = delayReason({ stillMin, stopsMin: Number(spot.stopsMin) || 0, paceKmh: typeof spot.paceKmh === "number" ? Math.round(spot.paceKmh) : null, plannedKmh: speed, driverSaid: said, why: typeof spot.why === "string" ? spot.why : null, whyPlace: typeof spot.whyPlace === "string" ? spot.whyPlace : "", offKm: typeof spot.offKm === "number" ? spot.offKm : 0, stopPlace: place || "", stopKind: typeof spot.stopKind === "string" ? spot.stopKind : null }) || (said ? `${checkinLabel(said)}.` : t.jsNoReason());
     if (late > 25) return out("At risk", "checkin", `${lead}${t.jsRiskReason({ past: t.jsRiskPast({ n: late }), reason: why, where: place || clock(at) })}`, true);
