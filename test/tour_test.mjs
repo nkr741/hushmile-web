@@ -2,7 +2,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { setLanguage } from "../hushmile-viewer.js";
-import { errorWords, haltState, missingFirst, nudgeLink, parseTourHash, splitNames, tourPost, waDigits } from "../tour.js";
+import { errorWords, haltState, missingFirst, nudgeLink, parseTourHash, splitBack, splitNames, tourPost, UNDO_MS, waDigits } from "../tour.js";
+import { readFileSync } from "node:fs";
+import { t } from "../hushmile-viewer.js";
 
 const A = "0123456789abcdef0123456789abcdef";
 const B = "fedcba9876543210fedcba9876543210";
@@ -81,4 +83,27 @@ test("posts the key in the body, never in the URL, and survives no connection", 
   assert.deepEqual(ok, { ok: true, status: 200, body: { role: "board", pax: [] } });
   const down = await tourPost("read", {}, async () => { throw new TypeError("offline"); });
   assert.deepEqual(down, { ok: false, status: 0, body: null });
+});
+
+test("UX-35: people back fold into one list; one Undo for 10 seconds", () => {
+  const pax = [{ id: 1, name: "Anil", back: true }, { id: 2, name: "Bhavani", back: false }, { id: 3, name: "Divya", back: true }];
+  const { waiting, back } = splitBack(pax);
+  assert.deepEqual(waiting.map((p) => p.name), ["Bhavani"]);
+  assert.deepEqual(back.map((p) => p.name), ["Anil", "Divya"]);
+  assert.deepEqual(splitBack(null), { waiting: [], back: [] });
+  assert.equal(UNDO_MS, 10000);
+  for (const lang of ["en", "te", "hi", "ta", "kn"]) {
+    setLanguage(lang);
+    assert.match(t.webTourBackFold({ n: 8 }), /\(8\)/);
+    assert.ok(t.webTourSnack({ name: "Anil" }).includes("Anil"));
+    assert.ok(t.webTourUndoShort().length > 0);
+    assert.ok(t.webTourNotBack().length > 0);
+  }
+  setLanguage("en");
+  assert.equal(t.webTourBackFold({ n: 8 }), "Back on the bus (8)");
+  // No "Tapped by mistake? Undo" under every name any more.
+  const js = readFileSync(new URL("../tour.js", import.meta.url), "utf8");
+  assert.ok(!js.includes("webTourUndo()"));
+  const html = readFileSync(new URL("../tour.html", import.meta.url), "utf8");
+  assert.match(html, /id="undo" role="status" hidden/);
 });

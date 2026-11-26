@@ -19,7 +19,23 @@ test("SOS banner: name, exact location with its age, call and map links, until I
   const spot = { km: 50, updatedAt: local(11, 9), fixAt: local(11, 8), checkin: "help", sosAt: local(11, 8), sos: true, lat: 17.1, lng: 79.2, place: "Suryapet", phone: "+91 90000 00000" };
   const b = sosBanner(spot, trip, now);
   assert.equal(b.title, "Naveen pressed SOS");
-  assert.equal(b.body, "Last location Suryapet (17.10000° N, 79.20000° E), measured 2 min ago. Please call them now.");
+  // UX-05: the place and its age lead; coordinates on their own line.
+  assert.equal(b.lead, "Near Suryapet · 2 min ago");
+  assert.equal(b.body, "Please call them now.");
+  assert.equal(b.coords, "17.10000° N, 79.20000° E");
+  assert.equal(b.copy, "Copy");
+  assert.equal(b.dial.label, "Call 112");
+  assert.equal(b.dial.href, "tel:112");
+  assert.equal(sosBanner({ ...spot, place: undefined }, trip, now).lead, "Last location 2 min ago");
+  assert.equal(sosBanner({ ...spot, lat: undefined, lng: undefined, place: undefined }, trip, now).body, "No location yet. Please call them now.");
+  for (const lang of ["te", "hi", "ta", "kn"]) {
+    setLanguage(lang);
+    const x = sosBanner(spot, trip, now);
+    assert.ok(x.lead.includes("Suryapet"), lang);
+    assert.notEqual(x.body, "Please call them now.", lang);
+    assert.ok(x.dial.label.includes("112"), lang);
+  }
+  setLanguage("en");
   assert.equal(b.call.href, "tel:+919000000000");
   assert.equal(b.call.label, "Call Naveen");
   assert.ok(b.map.href.includes("17.100000,79.200000"));

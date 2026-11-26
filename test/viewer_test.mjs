@@ -1,7 +1,7 @@
 // node --test web-viewer/test/
 import assert from "node:assert/strict";
 import test from "node:test";
-import { catchUpLine, clock, deadAlertApplies, decodePoly, noUpdateAfter, load, openFor, readTrip, sealFor, shownCode, topicFor, viewState } from "../hushmile-viewer.js";
+import { catchUpLine, clock, sayableMinutes, sentArrival, staleLeftLine, deadAlertApplies, decodePoly, noUpdateAfter, load, openFor, readTrip, sealFor, shownCode, topicFor, viewState } from "../hushmile-viewer.js";
 
 const CODE = "AB23-CD45";
 
@@ -33,20 +33,26 @@ test("waiting shows no fake progress", () => {
   const s = viewState({ trip, spot: null, now });
   assert.equal(s.title, "Waiting for a location");
   assert.equal(s.lastUpdate, null);
+  // UX-03: grey and neutral, never "On time".
+  assert.equal(s.tone, "quiet");
+  assert.equal(s.waiting, true);
+  assert.equal(s.sentence, "Waiting for the first update");
+  assert.equal(s.body, "Usually within a minute after the journey starts.");
+  assert.doesNotMatch(s.sentence, /On time/);
 });
 
 test("on track sentence and km left", () => {
   const s = viewState({ trip, spot: { km: 60, updatedAt: now - 60000, movedAt: now - 60000 }, now });
   assert.equal(s.title, "On track");
   assert.equal(s.kmLeft, 60);
-  assert.match(s.sentence, /^On time\. About 60 minutes to go\.$/);
+  assert.match(s.sentence, /^On time\. About 1 h to go\.$/);
 });
 
 test("a longer traffic estimate at the start is not well behind", () => {
   const fresh = { name: "Raju", to: "Vijayawada", start: now - 2 * 60000, totalKm: 264, speedKmh: 60 };
   const s = viewState({ trip: fresh, spot: { km: 1, updatedAt: now, movedAt: now, roadMin: 310, place: "Nacharam" }, now });
   assert.equal(s.title, "On track");
-  assert.match(s.sentence, /310/);
+  assert.match(s.sentence, /About 5 h 10 min to go/);
   assert.doesNotMatch(s.sentence, /well behind/);
 });
 
@@ -64,7 +70,7 @@ test("gap, then dead-phone wording after 20 minutes", () => {
   assert.equal(gap.title, "Signal gap");
   assert.match(gap.sentence, /^No new update\. Last update Kodad/);
   const dead = viewState({ trip, spot: { km: 60, updatedAt: now - 21 * 60000, place: "Kodad", battery: 6 }, now });
-  assert.match(dead.sentence, /^No update since .*Last seen near Kodad, 60 km from the destination\. The battery was 6%, so the phone may have switched off\.$/);
+  assert.match(dead.sentence, /^No update since .*Last seen near Kodad, 60 km from the destination\. The battery was 6%, so the phone may have switched off\. 1 h to go as of .*\.$/, "app 1.1.1+128: how long was left, as of the last update");
 });
 
 test("slower announced rhythm is not a gap", () => {
@@ -144,7 +150,21 @@ test("load() reads sealed messages from a relay", async () => {
 });
 
 // ---- Languages, near-destination and battery (1.2.0) ----------------------
-import { nearMinutes, pickLanguage, setLanguage } from "../hushmile-viewer.js";
+import { durationText, nearMinutes, pickLanguage, setLanguage } from "../hushmile-viewer.js";
+
+test("UX-04: one duration rule, the same as the app", () => {
+  setLanguage("en");
+  assert.equal(durationText(45), "45 min");
+  assert.equal(durationText(59), "59 min");
+  assert.equal(durationText(60), "1 h");
+  assert.equal(durationText(133), "2 h 13 min");
+  assert.equal(durationText(245), "4 h 5 min");
+  setLanguage("te");
+  assert.equal(durationText(133), "2 గం. 13 నిమి.");
+  setLanguage("hi");
+  assert.equal(durationText(133), "2 घंटे 13 मिनट");
+  setLanguage("en");
+});
 import { STRINGS } from "../i18n.js";
 
 test("every web string exists in Telugu and Hindi, translated", () => {
@@ -185,7 +205,9 @@ test("Telugu and Hindi sentences, with locale times", () => {
 test("near uses the driver's geofence, says almost there and never arrived", () => {
   const near = viewState({ trip, spot: { km: 100, updatedAt: now - 60000, movedAt: now - 60000, near: true, nearM: 450, roadMin: 2 }, now });
   assert.equal(near.title, "Near the destination");
-  assert.equal(near.sentence, "Almost there, about 2 min away.");
+  assert.equal(near.sentence, "Almost there, arriving now.", "never about 1 or 2 min (app 1.1.1+128)");
+  const nearer = viewState({ trip, spot: { km: 100, updatedAt: now - 60000, movedAt: now - 60000, near: true, nearM: 2500, roadMin: 6 }, now });
+  assert.equal(nearer.sentence, "Almost there, about 6 min away.");
   const notYet = viewState({ trip, spot: { km: 118, updatedAt: now - 60000, movedAt: now - 60000, near: false }, now });
   assert.notEqual(notYet.title, "Near the destination", "an explicit false wins over the 3 km fallback");
   const legacy = viewState({ trip, spot: { km: 118, updatedAt: now - 60000, movedAt: now - 60000 }, now });
@@ -214,4 +236,38 @@ test("pickup line on a company trip: near with minutes, here, and only while fre
   assert.deepEqual(pickupLines({ ...near, pickup: { stage: "near" } }, now), []);
   assert.deepEqual(pickupLines({ km: 1, updatedAt: now }, now), []);
   assert.deepEqual(pickupLines({ ...near, pickup: { stage: "left" } }, now), []);
+});
+
+test("arrival state from the phone (app 1.1.1+128): arriving, at the destination, old updates, older phones", () => {
+  const fresh = { updatedAt: now - 60000, movedAt: now - 60000 };
+  // The state wins over the old near flag and the 3 km fallback.
+  const onway = viewState({ trip, spot: { ...fresh, km: 118, arr: "onway" }, now });
+  assert.notEqual(onway.title, "Near the destination");
+  const arriving = viewState({ trip, spot: { ...fresh, km: 60, arr: "arriving", nearM: 900, roadMin: 4 }, now });
+  assert.equal(arriving.title, "Near the destination");
+  assert.equal(arriving.sentence, "Almost there, about 4 min away.");
+  const soon = viewState({ trip, spot: { ...fresh, km: 119.5, arr: "arriving", nearM: 300, roadMin: 1 }, now });
+  assert.equal(soon.sentence, "Almost there, arriving now.");
+  const there = viewState({ trip, spot: { ...fresh, km: 120, arr: "atdest", near: true }, now });
+  assert.equal(there.title, "At the destination");
+  assert.match(there.sentence, /hasn't tapped I've arrived yet/);
+  // On track never says about 1 or 2 min.
+  const two = viewState({ trip: { ...trip, start: now - 60 * 60000 }, spot: { ...fresh, km: 100, roadMin: 2, arr: "onway" }, now });
+  assert.doesNotMatch(two.sentence, /About [12] min/);
+  // An old update: how long was left, as of its time.
+  const old = now - 60 * 60000;
+  const gap = viewState({ trip, spot: { km: 40, updatedAt: old, movedAt: old, roadMin: 25, arr: "onway" }, now });
+  assert.equal(gap.title, "Signal gap");
+  assert.ok(gap.sentence.endsWith(`25 min to go as of ${clock(old)}.`), gap.sentence);
+  const gapThere = viewState({ trip, spot: { km: 120, updatedAt: old, movedAt: old, arr: "atdest" }, now });
+  assert.ok(gapThere.sentence.endsWith(`Was at the destination as of ${clock(old)}.`), gapThere.sentence);
+  // An older phone (no arr): the near flag as before; stale still says as of.
+  const legacy = viewState({ trip, spot: { ...fresh, km: 100, near: true, nearM: 2500, roadMin: 6 }, now });
+  assert.equal(legacy.title, "Near the destination");
+  const legacyGap = viewState({ trip, spot: { km: 40, updatedAt: old, movedAt: old, roadMin: 25 }, now });
+  assert.ok(legacyGap.sentence.endsWith(`25 min to go as of ${clock(old)}.`), legacyGap.sentence);
+  assert.equal(sentArrival({ arr: "bogus" }), null);
+  assert.equal(sayableMinutes(2.4), null);
+  assert.equal(sayableMinutes(3), 3);
+  assert.equal(staleLeftLine("arriving", 20, old), `Was arriving as of ${clock(old)}.`);
 });

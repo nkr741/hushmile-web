@@ -57,11 +57,27 @@ function labelMap() {
   name(".maplibregl-ctrl-zoom-out, .leaflet-control-zoom-out", t.mapZoomOut());
 }
 
+/** UX-32: the start page is a plain heading over the code box and Open,
+ * not a status card that looks like an input. */
+function showEnter() {
+  $("enter").textContent = t.webEnter();
+  $("enter").hidden = false;
+  $("status").hidden = true;
+}
+
 function show(state) {
   shownState = state;
+  $("enter").hidden = true;
+  $("status").hidden = false;
+  // UX-03/31: waiting is grey and says so; the advice is normal text.
+  const waiting = state.waiting === true;
+  $("status").classList.toggle("waiting", waiting);
   $("status").style.setProperty("--tone", `var(--${state.tone})`);
-  $("band").textContent = bands[state.tone] ? t[bands[state.tone]]() : t.webJourney();
+  $("band").textContent = waiting ? t.waitingLabel() : bands[state.tone] ? t[bands[state.tone]]() : t.webJourney();
   $("sentence").textContent = state.sentence;
+  $("body").textContent = state.body || "";
+  $("body").hidden = !state.body;
+  $("status").querySelector(".facts").hidden = waiting;
   $("last").textContent = t.lastUpdate({ at: state.lastUpdate ? `${clock(state.lastUpdate)} · ${t.minAgo({ n: Math.floor((Date.now() - state.lastUpdate) / 60000) })}` : t.notYetReceived() });
   $("left").textContent = state.kmLeft != null ? t.kmLeft({ km: state.kmLeft < 10 ? state.kmLeft.toFixed(1) : String(Math.round(state.kmLeft)) }) : "";
   $("speed").textContent = state.speed || "";
@@ -83,9 +99,23 @@ function paintSos(sos) {
   $("sos").hidden = !sos;
   if (!sos) return;
   $("sos-title").textContent = sos.title;
+  $("sos-lead").textContent = sos.lead || "";
+  $("sos-lead").hidden = !sos.lead;
   $("sos-body").textContent = sos.body;
+  $("sos-coords").hidden = !sos.coords;
+  $("sos-pin").textContent = sos.coords || "";
+  const copy = $("sos-copy");
+  copy.textContent = sos.copy;
+  copy.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(sos.coords);
+      copy.textContent = sos.copied;
+      setTimeout(() => { copy.textContent = sos.copy; }, 2000);
+    } catch { /* the text can still be selected and copied by hand */ }
+  };
   $("sos-sub").textContent = sos.noPhone ? `${sos.sub} ${sos.noPhone}` : sos.sub;
-  $("sos-links").replaceChildren(...[sos.call, sos.map].filter(Boolean).map(link));
+  $("sos-call").replaceChildren(...[sos.call].filter(Boolean).map(link));
+  $("sos-links").replaceChildren(...[sos.map, sos.dial].filter(Boolean).map(link));
 }
 
 /** Help on the route: dial links (the phone's dialler opens; nothing is
@@ -266,6 +296,8 @@ function start(input) {
   // Keep the link key (and a drop-off code key) in the address.
   const hash = (key ? `${shown}.${linkKeyText(key)}` : shown) + (drop ? `.d${drop}` : "");
   if (location.hash.slice(1) !== hash) history.replaceState(null, "", `#${hash}`);
+  $("enter").hidden = true;
+  $("status").hidden = false;
   $("sentence").textContent = t.openingJourney();
   clearInterval(timer);
   refresh(shown);
@@ -327,12 +359,12 @@ $("lang").addEventListener("change", () => {
   paintDrop();
   if (current) refresh(current);
   else if (dropKey && location.hash.slice(1) === `d${dropKey}`) $("sentence").textContent = t.webDropOnly();
-  else if (!shownState) $("sentence").textContent = t.webEnter();
+  else if (!shownState) showEnter();
 });
 
 setLanguage(pickLanguage(readSaved(), navigator.languages || [navigator.language]));
 paintPage();
 $("band").textContent = t.webJourney();
-$("sentence").textContent = t.webEnter();
+showEnter();
 start(location.hash.slice(1));
 addEventListener("hashchange", () => start(location.hash.slice(1)));

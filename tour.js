@@ -18,6 +18,8 @@ export const TOUR_NAME_MAX = 40;
 export const HALT_DEFAULT_MIN = 20;
 export const HALT_MAX_MIN = 240;
 export const EXTEND_MIN = 10;
+/** How long the one Undo stays after a tap (UX-35). */
+export const UNDO_MS = 10000;
 
 const HEX32 = /^[0-9a-f]{32}$/;
 
@@ -65,6 +67,13 @@ export function haltState(view, now) {
 export function missingFirst(pax) {
   const list = Array.isArray(pax) ? pax : [];
   return [...list.filter((p) => !p.back), ...list.filter((p) => p.back)];
+}
+
+/** UX-35: the people still to come back stay as rows; those back fold into
+ * one "Back on the bus (n)" list. */
+export function splitBack(pax) {
+  const list = Array.isArray(pax) ? pax : [];
+  return { waiting: list.filter((p) => !p.back), back: list.filter((p) => p.back) };
 }
 
 /** Same digits rule as the app (lib/voice/listen.dart waDigits). */
@@ -135,6 +144,8 @@ function startPage() {
   let busy = false;
   let timer = null;
   let minutes = HALT_DEFAULT_MIN;
+  let undo = null; // {id, name, until}
+  let undoTimer = null;
 
   const now = () => Date.now() + skew;
 
@@ -203,9 +214,10 @@ function startPage() {
     row.append(el("span", { className: "name", textContent: p.name }));
     if (p.back) {
       row.append(el("span", { className: "ok", textContent: `✓ ${t.webTourIsBack()}` }));
-      row.append(el("button", { type: "button", className: "link", textContent: t.webTourUndo(), onclick: () => call("back", { pax: p.id, back: false }) }));
+      // Only the guide can set someone back to not back, later on.
+      if (guide && view.open !== false) row.append(el("button", { type: "button", className: "link", textContent: t.webTourNotBack(), onclick: () => call("back", { pax: p.id, back: false }) }));
     } else if (halt) {
-      row.append(el("button", { type: "button", textContent: guide ? t.webTourMark() : t.webTourBack(), onclick: () => call("back", { pax: p.id, back: true }) }));
+      row.append(el("button", { type: "button", textContent: guide ? t.webTourMark() : t.webTourBack(), onclick: () => markBack(p) }));
       if (guide) {
         const wa = nudgeLink(p, view.halt.leavesAt);
         row.append(wa ? el("a", { className: "btn ghost", href: wa, target: "_blank", rel: "noopener noreferrer", textContent: t.webTourNudge() }) : el("span", { className: "sub", textContent: t.webTourNoPhone() }));
@@ -215,6 +227,32 @@ function startPage() {
       row.append(el("button", { type: "button", className: "link", textContent: t.webTourRemove(), onclick: () => { if (confirm(`${t.webTourRemove()}: ${p.name}?`)) call("pax", { remove: [p.id] }); } }));
     }
     return row;
+  }
+
+  /** A tap on "I'm back": one Undo for 10 seconds instead of one under every name. */
+  async function markBack(p) {
+    await call("back", { pax: p.id, back: true });
+    if (note) return;
+    undo = { id: p.id, name: p.name };
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => { undo = null; paintUndo(); }, UNDO_MS);
+    paintUndo();
+  }
+
+  function paintUndo() {
+    const bar = $("undo");
+    if (!bar) return;
+    bar.replaceChildren();
+    bar.hidden = !undo;
+    if (!undo) return;
+    const was = undo;
+    bar.append(el("span", { textContent: t.webTourSnack({ name: was.name }) }));
+    bar.append(el("button", { type: "button", id: "undo-btn", textContent: t.webTourUndoShort(), onclick: () => {
+      clearTimeout(undoTimer);
+      undo = null;
+      paintUndo();
+      call("back", { pax: was.id, back: false });
+    } }));
   }
 
   function paint() {
@@ -240,7 +278,15 @@ function startPage() {
         const missing = people.filter((p) => !p.back).length;
         body.append(el("h2", { textContent: missing ? `${t.webTourMissing()} (${missing})` : t.webTourAllBack() }));
       }
-      body.append(el("ul", { className: "people" }, ...people.map((p) => personRow(p, guide, halting && view.open !== false))));
+      const open = halting && view.open !== false;
+      const { waiting, back } = splitBack(people);
+      if (waiting.length) body.append(el("ul", { className: "people" }, ...waiting.map((p) => personRow(p, guide, open))));
+      if (back.length) {
+        const fold = el("details", { className: "fold", id: "back-fold" });
+        fold.append(el("summary", { textContent: t.webTourBackFold({ n: back.length }) }));
+        fold.append(el("ul", { className: "people" }, ...back.map((p) => personRow(p, guide, open))));
+        body.append(fold);
+      }
     }
     if (halting) body.append(el("p", { className: "note", textContent: t.webTourCountHeads() }));
     if (guide && view.open !== false) {

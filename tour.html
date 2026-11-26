@@ -9,7 +9,7 @@
   <link rel="icon" href="data:,">
   <title>Hushmile · Group headcount</title>
   <style>
-    :root { --bg:#fff; --card:#f6f7f9; --fg:#16181d; --muted:#4f5663; --line:#e2e5ea; --ok:#1b7f4e; --warn:#a15c00; --blue:#2d69fc; --link:#2d69fc; }
+    :root { --bg:#fff; --card:#f6f7f9; --fg:#16181d; --muted:#4f5663; --line:#e2e5ea; --ok:#166c42; --warn:#8a4f00; --blue:#2d69fc; --link:#2d69fc; }
     @media (prefers-color-scheme: dark) { :root { --bg:#061018; --card:#10192a; --fg:#f7f9fc; --muted:#b7c3d4; --line:#2a3a52; --ok:#4cc38a; --warn:#f5b547; --link:#8ab0ff; } }
     * { box-sizing: border-box; }
     a { color: var(--link); }
@@ -34,6 +34,9 @@
     .person .name { flex: 1 1 10rem; font-size: 19px; font-weight: 700; overflow-wrap: anywhere; }
     .person.back .name { color: var(--muted); } .ok { color: var(--ok); font-weight: 700; }
     .note { color: var(--muted); font-size: 15px; margin-top: 14px; }
+    .fold { margin-top: 12px; border-top: 1px solid var(--line); } .fold summary { cursor: pointer; font-weight: 700; color: var(--ok); padding: 12px 0; min-height: 48px; display: flex; align-items: center; }
+    #undo { position: fixed; left: 12px; right: 12px; bottom: 12px; max-width: 536px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; border-radius: 14px; background: #16181d; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+    #undo[hidden] { display: none; } #undo span { flex: 1; } #undo button { background: transparent; color: #8ab0ff; }
   </style>
 </head>
 <body>
@@ -44,6 +47,7 @@
       <label class="lang"><span id="lang-label">Language</span> <select id="lang"></select></label>
     </header>
     <div id="body" aria-live="polite"></div>
+    <div id="undo" role="status" hidden></div>
     <p class="note"><a id="privacy" href="./privacy.html">Privacy</a></p>
   </main>
   <script type="module" src="./tour.js"></script>
